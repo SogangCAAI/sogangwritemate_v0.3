@@ -17,7 +17,7 @@ export type TurnRow = {
   user_action: Move | null;
   agent_action: string;
   apr: string | null;
-  judge: unknown;
+  judge: unknown; // 판정 + unquoted(글에 없는 인용) + ca{bargeIns, botTurns, rate, level} (끼어들기, v2 caJudge 층1)
   task_id: string | null;
   latency_ms: number;
 };
@@ -38,7 +38,8 @@ export class SessionStore {
     if (!move) return null;
     if (move === 'REPEAT_REQ' || move === 'PARAPHRASE_REQ' || move === 'EXAMPLE_REQ' || move === 'UNCLEAR') return 'repair';
     if (move === 'USER_INQUIRY' || move === 'EXEMPLAR_REQ') return 'insert';
-    if (move === 'ANSWER' || move === 'ACCEPT' || move === 'REJECT') return 'B2PP';
+    if (move === 'ANSWER' || move === 'ACCEPT' || move === 'REJECT' || move === 'CONFUSED') return 'B2PP'; // 막힘 = 비선호 둘째 짝
+    // OFF_GOAL(다른 요청)은 진행 관리 — 아래 manage
     if (move === 'CLOSER') return 'post';
     if (move === 'CONTINUER') return 'continuer';
     return 'manage';

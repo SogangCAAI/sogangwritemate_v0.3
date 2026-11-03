@@ -15,6 +15,13 @@ const SLOT = {
     idle: '지금 진행 중인 과제가 없다. 학생 말에 짧게 답한다.',
     none: '없음',
     unclear: '직전 학생 말을 한 번 못 알아들었다. 이번에도 UNCLEAR면 예시 하나를 붙여 같은 질문을 다시 한다.',
+    // 막힘 사다리 (ConfusionHandler) — 지금 횟수에 맞는 다음 칸
+    confused1: '학생이 이미 한 번 막혔고 단서도 받았다(막힘 1회). 이번 말도 CONFUSED면 단서·질문을 또 주지 말고 시범 한 문장을 준다: reply = 받음 + 따옴표 속 시범 한 문장 + "이대로 써도 되고 바꿔도 돼요". opens=P1.4, exemplar에 그 문장. 문단을 통째로 써 주지 않는다.',
+    confused2: '학생이 두 번 연달아 막혔다. 이번에도 CONFUSED면 코드가 이 과제를 미루고 넘어가니 reply는 "네."만.',
+    // 다른 요청 (OffGoalHandler) — 첫 요청인가
+    offGoal0: '학생이 지금 과제 말고 다른 것을 하자고 하면(OFF_GOAL) 이번이 첫 요청이다. 요청한 문단이 아직 안 한 과제이고 그쪽이 더 급하면(importance=higher) 코드가 그 과제로 바꾸니 reply는 "네."만. higher인데 남은 과제가 아니면 그 요청에 짧게 답한다. 그 밖에는 요청을 지금 과제와 이어 받아 지금 과제를 계속한다. 학생 요청이 덜 중요하면(importance=lower) "양보 + 그러나 + 이유"로 지금 과제를 지킨다 (예: "3문단도 좋아요. 그런데 2문단이 공고와 더 바로 이어져서 이것부터 끝내요.").',
+    offGoal1: '학생이 이미 한 번 다른 것을 하자고 했다. 또 OFF_GOAL이면 학생 뜻을 따른다: 요청한 문단이 아직 안 한 과제면 코드가 그 과제로 바꾸니 reply는 "네."만, 아니면 그 요청에 짧게 답한다.',
+    short: '학생이 튜터 말에 자주 끼어든다 — reply는 한 문장으로 짧게.',
     heard: '들은 경험',
   },
   en: {
@@ -26,6 +33,11 @@ const SLOT = {
     idle: 'No task is in progress. Reply briefly to the student.',
     none: 'none',
     unclear: 'You did not understand the student once already. If this is UNCLEAR again, ask the same question again with one example.',
+    confused1: 'The student is already stuck once and got a clue. If this is CONFUSED again, do not give another clue or question — give one sample sentence: reply = acknowledgement + one quoted sample sentence + "use it as is or change it". opens=P1.4, that sentence in exemplar. Never write a whole paragraph.',
+    confused2: 'The student has been stuck twice in a row. If this is CONFUSED again, code parks this task and moves on, so reply is just "Okay."',
+    offGoal0: 'If the student wants to work on something other than the current task (OFF_GOAL), this is their first such request. If the requested paragraph is a task not yet done and it is more urgent (importance=higher), code switches to it, so reply is just "Okay." If higher but not a remaining task, answer their request briefly. Otherwise take the request into the current task and continue it. If their request matters less (importance=lower), keep the current task with "concede + but + reason" (e.g. "Paragraph 3 is worth doing too. But paragraph 2 ties more directly to the posting, so let\'s finish it first.").',
+    offGoal1: 'The student has already asked once to work on something else. If OFF_GOAL again, follow them: if the requested paragraph is a task not yet done, code switches to it, so reply is just "Okay."; otherwise answer their request briefly.',
+    short: 'The student often talks over you — keep reply to one short sentence.',
     heard: 'heard so far',
   },
 };
@@ -40,6 +52,19 @@ function slotFor(s: SessionState): string {
   return t.evidence ? S.edit(t.target.paragraph) : S.listen;
 }
 
+// 이번 턴의 덧붙임 줄 — 못 알아들음 · 막힘 · 다른 요청 · 끼어들기
+function notesFor(s: SessionState, short: boolean): string {
+  const S = SLOT[s.lang];
+  const inTask = !!activeTask(s);
+  return [
+    s.unclearStreak === 1 ? S.unclear : '',
+    inTask && s.confusedStreak === 1 ? S.confused1 : '',
+    inTask && s.confusedStreak >= 2 ? S.confused2 : '',
+    s.stage === 'closing' ? '' : s.offGoalCount === 0 ? S.offGoal0 : S.offGoal1,
+    short ? S.short : '',
+  ].filter(Boolean).join('\n');
+}
+
 function taskLine(t: Task, lang: Lang): string {
   const where = lang === 'en' ? `paragraph ${t.target.paragraph}` : `${t.target.paragraph}문단`;
   return `${t.order}. [${t.status}] ${t.goal} (${t.kind}, ${where}${t.target.keyword ? `, '${t.target.keyword}'` : ''}) — doneWhen: ${t.doneWhen}`;
@@ -48,7 +73,8 @@ function taskLine(t: Task, lang: Lang): string {
 export class TurnPrompt {
   constructor(private readonly book: PromptBook) {}
 
-  system(s: SessionState, ctx: Context): string {
+  // short: 학생이 자주 끼어든다 (Interruption.shorten) — 한 문장으로
+  system(s: SessionState, ctx: Context, short = false): string {
     const S = SLOT[s.lang];
     const t = activeTask(s);
     const hits = findCliches(ctx.paragraphs);
@@ -60,7 +86,7 @@ export class TurnPrompt {
       open: s.open ? `${s.open.pattern} — "${s.open.firstPair}"` : S.none,
       task: t ? `${taskLine(t, s.lang)}${t.experience.length ? ` / ${S.heard}: ${t.experience.join(' ')}` : ''}` : S.none,
       slot: slotFor(s),
-      unclear: s.unclearStreak === 1 ? S.unclear : '',
+      notes: notesFor(s, short),
     });
   }
 

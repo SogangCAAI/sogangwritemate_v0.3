@@ -16,6 +16,8 @@
 //  어느 국면에서든 먼저 (국면에 맡기지 않는 수):
 //   REPEAT/PARAPHRASE/EXAMPLE_REQ → RepairHandler.replay (B2, last에서 코드가 답함)
 //   UNCLEAR                       → RepairHandler.unclear (B1.2, 1·2·3회)
+//   CONFUSED                      → ConfusionHandler (막힘 1회 단서 · 2회 시범 · 3회 과제 미루고 다음, v2 caJudge)
+//   OFF_GOAL                      → OffGoalHandler (첫 요청 겹쳐 받기 · 더 급하거나 거듭 청하면 그 과제로, v2 sessionGoal)
 //   PRE_CLOSING                   → Agenda.startClosing (요약부터)
 //   남은 시간 3분                  → Agenda.closeForTime (제안 아님 — 20분 전에 마무리; 쉼·답 뒤에 확인)
 //   과제를 끝냈을 때 남은 시간 < 7분 → 다음 과제 대신 마무리 (과제 2·3은 시간이 될 때만)
@@ -24,6 +26,8 @@ import type { Judge, Lang, Outcome, SessionState, Task, TurnEvent } from '../sta
 import { activeTask } from '../state';
 import { lines } from '../lines';
 import { Agenda } from './Agenda';
+import { ConfusionHandler } from './ConfusionHandler';
+import { OffGoalHandler } from './OffGoalHandler';
 import type { Phase } from './Phase';
 import { PhaseFactory } from './PhaseFactory';
 import { EditingPhase, type EditEvent } from './phases/EditingPhase';
@@ -49,7 +53,7 @@ export class TutoringSession {
       id: a.id, lang: a.lang, stage: 'opening',
       open: { pattern: 'A3', firstPair: L.greeting, parts, part: 0 },
       topic: {}, last: { played: L.greeting, paraphrase: '', example: '' },
-      repaired: false, unclearStreak: 0, tasks: a.tasks, startedAt: a.now, helped: null, closeOffered: false,
+      repaired: false, unclearStreak: 0, confusedStreak: 0, offGoalCount: 0, tasks: a.tasks, startedAt: a.now, helped: null, closeOffered: false,
     });
   }
 
@@ -90,10 +94,15 @@ export class TutoringSession {
       case 'PARAPHRASE_REQ':
       case 'EXAMPLE_REQ': return new RepairHandler(s).replay(j.move);
       case 'UNCLEAR': return new RepairHandler(s).unclear(j);
-      case 'PRE_CLOSING': return Agenda.startClosing(s, true);
-      case 'ABORT': return PhaseFactory.for(s).onAbort(text, now);
+      case 'CONFUSED': return new ConfusionHandler(s).onConfused(j, text, now);
+      case 'OFF_GOAL': return new OffGoalHandler(s).onOffGoal(j, now);
     }
-    const phase = PhaseFactory.for({ ...s, unclearStreak: 0 }); // 알아들었다 — 못 알아들은 횟수는 0
+    const s0 = { ...s, confusedStreak: 0 }; // 막힘이 아닌 수 — 막힘 횟수는 0 (수리·못 알아들음은 세지 않고 건너뛴다)
+    switch (j.move) {
+      case 'PRE_CLOSING': return Agenda.startClosing(s0, true);
+      case 'ABORT': return PhaseFactory.for(s0).onAbort(text, now);
+    }
+    const phase = PhaseFactory.for({ ...s0, unclearStreak: 0 }); // 알아들었다 — 못 알아들은 횟수는 0
     switch (j.move) {
       case 'ANSWER': return phase.onAnswer(j, text, now);
       case 'CONTINUER': return phase.onContinuer(j, text, now);

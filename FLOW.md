@@ -7,7 +7,7 @@
 
 ```
 학생 발화 ─▶ TurnHandler ─▶ TurnResponder(Haiku: 판정 + 튜터 말) ─▶ TutoringSession.onSay
-                                                                        ├─ 국면과 상관없는 수 먼저: 수리(B2) · UNCLEAR(B1) · PRE_CLOSING · ABORT
+                                                                        ├─ 국면과 상관없는 수 먼저: 수리(B2) · UNCLEAR(B1) · CONFUSED · OFF_GOAL · PRE_CLOSING · ABORT
                                                                         └─ 나머지: PhaseFactory.for(state).onAnswer / onAccept / …
 쉼        ─▶ TurnHandler ─▶ TutoringSession.onPause ─▶ 국면.onPause
 문단 저장 ─▶ EvaluateHandler ─▶ (Evaluator: Haiku) ─▶ TutoringSession.onEdit ─▶ EditingPhase.onEdit
@@ -64,6 +64,22 @@ stateDiagram-v2
 | EXAMPLE_REQ | `last.example`, 없으면 기본 문장 | B2.6 |
 | UNCLEAR ×1 / ×2 / ×3 | "한 번만 더" (코드) / 모델이 예시 붙여 다시 묻기 / 방향 바꾸기 P1 (코드) | B1.2.0 / B1.2.1 / B5.1 |
 | CLOSER (수리·질문 직후) | 곁가지만 닫고 원래 짝 유지 (`Phase.onCloser` → `RepairHandler.closeSideSequence`) | B4.4 |
+
+**국면보다 먼저 보는 수 둘 — v2 caJudge에서 옮김** (자세한 근거: ARCHITECTURE.md 'v2 caJudge → v3'):
+
+| 수 | 하는 일 | agentAction |
+|---|---|---|
+| CONFUSED ×1 (`ConfusionHandler`) | 모델이 질문을 좁히는 단서 하나 + 같은 질문 (`open=A5.1`), `confusedStreak=1` | clue_up |
+| CONFUSED ×2 | 모델이 시범 한 문장 (`open=P1.4`, exemplar 기록 — 대필 금지 그대로), `confusedStreak=2` | exemplar |
+| CONFUSED ×3 | "이건 나중에 다시 봐요. 다음으로 넘어갈게요." (코드) — 과제 `skipped`(evidence '학생이 막힘') → `Agenda.proposeNext` (시간 규칙 그대로, 남은 7분 미만이면 마무리) | move_on:P1 / move_on:C4.0 |
+| CONFUSED (과제 없음 · 마무리) | 과제 없음: 모델이 풀어 말하고 열린 짝 유지 / 마무리: 그 국면의 답(성공 확인 부정 → C4.7) | clarify / 국면 |
+| OFF_GOAL, 요청 문단 = pending 과제이고 (`importance=higher` 또는 두 번째 이상 요청) (`OffGoalHandler`) | 지금 과제는 `pending`으로(들은 것·턴 수 유지), 요청한 과제 시작 + "좋아요, 그것부터 봐요. 하던 건 나중에 다시 해요. {opener}" (코드, `open=A5.1`) | sequence_student_first |
+| OFF_GOAL 첫 요청 (higher 아님) | 모델이 요청을 지금 과제와 이어 받고 계속 (겹쳐 받기). `lower`면 "양보 + 그러나 + 이유" | subsume / keep_goal |
+| OFF_GOAL 그 밖 (거듭 청했는데 맞는 과제 없음 · higher인데 맞는 과제 없음) | 모델이 요청에 짧게 답하고 과제 표는 그대로 | follow_student |
+
+- `confusedStreak`는 CONFUSED·수리(REPEAT/PARAPHRASE/EXAMPLE_REQ)·UNCLEAR가 아닌 수가 오면 0, 새 과제를 시작해도 0. 쉼·편집은 세지 않는다 (v2 notUnderstood와 같음). `offGoalCount`는 세션 누적.
+- 모델은 같은 턴에 말을 만들므로 `TurnPrompt`가 지금 막힘 횟수·다른 요청 횟수를 알려 줘 맞는 칸의 말을 하게 한다 (코드가 말하는 칸에서는 모델 말을 버린다).
+- **끼어들기 → 짧게** (국면과 무관, 말 길이만): 클라이언트가 세션 동안 소리 난 튜터 줄(`botTurns`)과 그중 학생이 덮어 끊은 줄(`bargeIns`)을 세어 매 턴 `ca`로 보낸다. `botTurns ≥ 5`이고 비율 ≥ 0.25면 프롬프트에 "한 문장으로 짧게" + `TurnResponder.tidy` 상한 1문장(시범 턴은 2). 0.10 이상은 `some`으로 기록만 (`turns.judge.ca`).
 
 ## 2. 국면별
 
@@ -127,6 +143,9 @@ stateDiagram-v2
 | `Phase.ts` | 바탕 클래스 — 템플릿 메서드와 기본값 (과제 중 일반 규칙) |
 | `PhaseFactory.ts` | 상태 필드 → 국면 (위에서부터 처음 맞는 줄) |
 | `RepairHandler.ts` | B2 수리 · B1 UNCLEAR · B4.4 |
+| `ConfusionHandler.ts` | CONFUSED 막힘 사다리 (단서 → 시범 → 미루고 다음) |
+| `OffGoalHandler.ts` | OFF_GOAL 다른 요청 (겹쳐 받기 · 학생 안건 먼저 · 따르기) |
+| `Interruption.ts` | 끼어들기 비율 → 등급(none·some·high) · 짧게 |
 | `Agenda.ts` | 다음 파트 · 다음 과제 제안 · 마무리 시작 · 시간 nudge |
 | `Say.ts` | 결과 만들기: `nothing` · `line` · `code`(last 갱신) · `model`(opens 반영) · `end` |
 | `Tasks.ts` | 과제 표 연산 (update · start · finish · skip · countTurn · exemplarUsed) |

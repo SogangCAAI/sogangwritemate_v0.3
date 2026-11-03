@@ -1,8 +1,9 @@
 // 튜터 말하기 — 서버 TTS(/api/tts)를 <audio>로 재생하고, 서버 음성이 없으면 브라우저 내장 speechSynthesis.
 // <audio>로 재생해야 Chrome의 메아리 제거가 그 소리를 기준 신호로 삼아 마이크에서 걸러 낸다 (BargeInDetector).
 // 줄마다 번호를 붙인다 — 끝까지 말했거나 끊기면 onEnd(번호). 그새 다음 줄로 넘어간 늦은 소리는 버린다.
+// 끼어들기 집계(ca): 소리가 실제로 시작된 줄(botTurns)과 그중 학생이 덮어 끊은 줄(bargeIns)을 세션 동안 센다 (v2 CASummary).
 import { toSpoken } from '../../spoken';
-import type { Lang } from '../../state';
+import type { CaCounts, Lang } from '../../state';
 import { LOCALE, synthAvailable } from './types';
 
 const SPEECH_MS_PER_CHAR = 250; // 끝 이벤트가 오지 않을 때를 대비한 안전 시간
@@ -40,6 +41,8 @@ export class TutorSpeaker {
   private playMode: SpeakMode = 'server';
   private playStartedAt = 0;
   private safety: ReturnType<typeof setTimeout> | undefined;
+  private audible = false; // 지금 줄의 소리가 실제로 시작됐나
+  private counts: CaCounts = { bargeIns: 0, botTurns: 0 };
 
   constructor(private readonly events: SpeakerEvents) {}
 
@@ -47,6 +50,7 @@ export class TutorSpeaker {
   get spokeUntil(): number { return this.endedAt; } // 마지막 줄이 끝난 시각
   get mode(): SpeakMode { return this.playMode; }
   get startedAt(): number { return this.playStartedAt; }
+  get ca(): CaCounts { return this.counts; } // 세션 누적 끼어들기 집계
 
   // 말할 줄의 번호 (빈 줄이면 0)
   speak(shown: string, lang: Lang): number {
@@ -56,6 +60,7 @@ export class TutorSpeaker {
     const id = ++this.nextId;
     this.currentId = id;
     this.line = text;
+    this.audible = false;
     this.playStartedAt = Date.now();
     this.events.onStart();
     clearTimeout(this.safety);
@@ -67,6 +72,7 @@ export class TutorSpeaker {
       const el = new Audio(`data:audio/mpeg;base64,${audio}`);
       this.audio = el;
       this.playStartedAt = Date.now();
+      el.onplaying = () => this.markAudible(id);
       el.onended = () => this.finish(id);
       el.onerror = () => this.speakWithBrowser(id, text, lang);
       el.play().catch(() => this.speakWithBrowser(id, text, lang)); // 자동 재생이 막히면 브라우저 음성으로
@@ -74,10 +80,11 @@ export class TutorSpeaker {
     return id;
   }
 
-  // 튜터 말 멈추기 — 지금 줄을 끊긴 것으로 끝낸다
-  stop(): void {
+  // 튜터 말 멈추기 — 지금 줄을 끊긴 것으로 끝낸다. byBarge = 학생이 말을 덮어 끊었다 (BargeInDetector)
+  stop(byBarge = false): void {
     const id = this.currentId;
     if (!id) return;
+    if (byBarge && this.audible) this.counts = { ...this.counts, bargeIns: this.counts.bargeIns + 1 };
     this.audio?.pause();
     if (synthAvailable()) window.speechSynthesis.cancel();
     this.finish(id);
@@ -88,6 +95,13 @@ export class TutorSpeaker {
     clearTimeout(this.safety);
     this.audio?.pause();
     if (synthAvailable()) window.speechSynthesis.cancel();
+  }
+
+  // 소리가 실제로 나기 시작한 줄만 분모(botTurns)에 센다 — 재생이 막혔거나 소리 없이 끝난 줄은 세지 않는다
+  private markAudible(id: number): void {
+    if (this.currentId !== id || this.audible) return;
+    this.audible = true;
+    this.counts = { ...this.counts, botTurns: this.counts.botTurns + 1 };
   }
 
   private finish(id: number): void {
@@ -107,6 +121,7 @@ export class TutorSpeaker {
     u.lang = locale;
     const voice = pickVoice(locale);
     if (voice) u.voice = voice;
+    u.onstart = () => this.markAudible(id);
     u.onend = () => this.finish(id);
     u.onerror = () => this.finish(id);
     window.speechSynthesis.speak(u);

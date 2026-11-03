@@ -1,7 +1,7 @@
 // 세션 진행 — 화면 밖의 일: 턴·재평가 호출, 대화 기록, 튜터 말 읽어 주기, 쉼 이벤트를 보낼 때 고르기.
 // 상태는 서버가 들고 있지 않다: 매 턴 지금 상태를 보내고 새 상태를 받는다.
 // 화면 상태(SessionView)는 바뀔 때마다 새 객체로 바꿔 끼우고 구독자에게 알린다 (useSyncExternalStore).
-import type { SessionState } from '../../state';
+import type { CaCounts, SessionState } from '../../state';
 import type { ApiClient, TurnResult } from '../ApiClient';
 import { errorText } from '../ApiClient';
 import type { Line, Start, StudentEvent } from '../types';
@@ -21,10 +21,11 @@ export interface SessionView {
   readonly sayId: number; // 지금 튜터 줄의 음성 번호 (0 = 소리로 말하지 않음)
 }
 
-// 컨트롤러가 쓰는 음성 쪽 — 말하기(줄 번호를 돌려줌)와 멈추기
+// 컨트롤러가 쓰는 음성 쪽 — 말하기(줄 번호를 돌려줌)와 멈추기, 끼어들기 집계
 export interface VoiceOut {
   speak: (text: string) => number;
   stop: () => void;
+  ca?: () => CaCounts;
 }
 
 // 쉼을 보낼지 고를 때 화면에서 알아야 하는 것
@@ -77,7 +78,8 @@ export class SessionController {
     }
     try {
       const { state, paragraphs } = this.view;
-      this.apply(await this.api.turn({ state, context: { posting: this.start.posting, paragraphs }, history, event }));
+      const ca = this.voice.ca?.() ?? { bargeIns: 0, botTurns: 0 }; // 자주 끼어들면 서버가 튜터 말을 한 문장으로 줄인다
+      this.apply(await this.api.turn({ state, context: { posting: this.start.posting, paragraphs }, history, event, ca }));
     } catch (e) {
       this.set({ error: errorText(e) });
     } finally {

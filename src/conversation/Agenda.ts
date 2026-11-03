@@ -25,9 +25,10 @@ export class Agenda {
   }
 
   // 다음 과제 시작을 제안한다(P1). 남은 과제가 없거나 시간이 모자라면 마무리로 — 과제 2·3은 시간이 될 때만
-  static proposeNext(s: SessionState, now: number, lead = ''): Outcome {
+  // closeLead: 마무리로 갈 때 기본 머리말("정리하고 끝낼게요") 대신 쓸 말
+  static proposeNext(s: SessionState, now: number, lead = '', closeLead?: string): Outcome {
     const t = Tasks.firstPending(s);
-    if (!t || sessionLeftMs(s, now) < NEXT_TASK_MIN_LEFT_MS) return Agenda.startClosing(s, true);
+    if (!t || sessionLeftMs(s, now) < NEXT_TASK_MIN_LEFT_MS) return Agenda.startClosing(s, true, closeLead);
     const say = [lead, lines(s.lang).proposeTask(t.goal)].filter(Boolean).join(' ');
     return Say.code({ ...s, repaired: false }, say, Tasks.proposal(say, t), 'P1');
   }

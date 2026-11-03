@@ -44,3 +44,10 @@ test('evaluate: 시범 문장 그대로면 재평가 없이 done', async () => {
   assert.equal(r.body.data.verdict, null);
   assert.equal(r.body.data.state.tasks[0].status, 'done');
 });
+
+test('turn: 끼어들기 집계는 선택 — 없으면 그대로, 틀린 모양은 400', async () => {
+  const okRun = await call(turn, { state: fresh(), context, event: { kind: 'pause' }, ca: { bargeIns: 1, botTurns: 5 } });
+  assert.equal(okRun.status, 200);
+  const bad = await call(turn, { state: fresh(), context, event: { kind: 'pause' }, ca: { bargeIns: -1, botTurns: 5 } });
+  assert.equal(bad.status, 400);
+});

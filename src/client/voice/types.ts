@@ -1,5 +1,5 @@
 // 음성 모듈의 바깥 모양(Voice)과 브라우저 음성 인식 타입
-import type { Lang } from '../../state';
+import type { CaCounts, Lang } from '../../state';
 
 export type VoiceState = 'listening' | 'speaking' | 'thinking' | 'muted' | 'unsupported';
 
@@ -15,6 +15,7 @@ export interface Voice {
   stop: () => void; // 튜터 말 멈추기
   endedId: number; // 끝까지 말했거나 끊긴 마지막 줄의 번호
   error: string;
+  ca: () => CaCounts; // 세션 누적 끼어들기 집계 (소리 난 튜터 줄 · 그중 학생이 덮어 끊은 줄)
 }
 
 export interface VoiceOptions {

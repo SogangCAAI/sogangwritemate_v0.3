@@ -25,6 +25,8 @@ export function useVoice({ lang, thinking, hold, onFinal }: VoiceOptions): Voice
   onFinalRef.current = onFinal;
 
   const stop = useCallback(() => speaker.stop(), [speaker]);
+  const onBarge = useCallback(() => speaker.stop(true), [speaker]); // 학생이 말을 덮어 끊음 — 끼어들기로 센다
+  const ca = useCallback(() => speaker.ca, [speaker]);
   const speak = useCallback((text: string) => speaker.speak(text, lang), [speaker, lang]);
 
   // 화면을 떠나면 말을 멈추고 마이크를 닫는다
@@ -34,8 +36,8 @@ export function useVoice({ lang, thinking, hold, onFinal }: VoiceOptions): Voice
   // 끼어들기 감지: 튜터가 말하는 동안만
   useEffect(() => {
     if (!speaking || !micOn || !canListen) return;
-    return barge.watch(speaker, stop);
-  }, [speaking, micOn, canListen, stop, barge, speaker]);
+    return barge.watch(speaker, onBarge);
+  }, [speaking, micOn, canListen, onBarge, barge, speaker]);
 
   // 음성 인식: 튜터가 말하는 동안은 끈다 (반이중)
   const running = canListen && micOn && !hold && !thinking && !speaking;
@@ -70,6 +72,6 @@ export function useVoice({ lang, thinking, hold, onFinal }: VoiceOptions): Voice
 
   return {
     state, canListen, canSpeak: true, micOn, held: canListen && micOn && hold,
-    toggleMic, interim, speak, stop, endedId, error,
+    toggleMic, interim, speak, stop, endedId, error, ca,
   };
 }

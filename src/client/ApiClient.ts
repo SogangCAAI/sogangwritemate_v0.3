@@ -1,6 +1,6 @@
 // 함수 호출 — 봉투 {ok, data, error}를 풀고, 실패는 사용자에게 보여 줄 문장으로 던진다
 import type { Rubric } from '../rubric';
-import type { Lang, SessionState } from '../state';
+import type { CaCounts, Lang, SessionState } from '../state';
 import type { Line, StudentEvent } from './types';
 
 export interface TurnResult {
@@ -26,7 +26,7 @@ export class ApiClient {
     return this.post('/api/diagnose', body);
   }
 
-  turn(body: { state: SessionState; context: Context; history: readonly Line[]; event: StudentEvent }): Promise<TurnResult> {
+  turn(body: { state: SessionState; context: Context; history: readonly Line[]; event: StudentEvent; ca?: CaCounts }): Promise<TurnResult> {
     return this.post('/api/turn', body);
   }
 

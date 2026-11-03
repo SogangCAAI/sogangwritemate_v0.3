@@ -23,9 +23,9 @@ export function useSession(start: Start, onFinish: (s: SessionState, final: read
     hold: editing || ended,
     onFinal: (text) => void ctl.send({ kind: 'say', text }),
   });
-  const { speak, stop, toggleMic } = voice;
+  const { speak, stop, toggleMic, ca } = voice;
 
-  useEffect(() => ctl.attachVoice({ speak, stop }), [ctl, speak, stop]);
+  useEffect(() => ctl.attachVoice({ speak, stop, ca }), [ctl, speak, stop, ca]);
   useEffect(() => ctl.speakOpening(), [ctl]);
 
   // 쉼: 튜터 말이 끝난 뒤 조용하면 다음 파트로

@@ -1,5 +1,6 @@
 // 끼어들기 감지 — 튜터가 말하는 동안만, 메아리 제거(echoCancellation)가 걸린 마이크의 소리 크기(RMS)로 잡는다.
 // 문턱을 일정 시간 넘게 이어지면 학생이 말을 시작한 것으로 보고 onBarge (튜터 멈춤 → 듣기 시작).
+// onBarge는 speaker.stop(true)로 이어져 끼어들기로 센다 (TutorSpeaker.ca — 서버가 말 길이를 줄일지 정한다).
 // 서버 TTS는 <audio>라 메아리 제거가 잘 되고, speechSynthesis는 OS가 재생해 못 걸러서 문턱을 높인다.
 import type { TutorSpeaker } from './TutorSpeaker';
 

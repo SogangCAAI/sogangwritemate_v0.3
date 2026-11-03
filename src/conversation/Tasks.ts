@@ -27,7 +27,13 @@ export class Tasks {
     const t = Tasks.find(s, id);
     if (!t) return s;
     const s1 = Tasks.update(s, id, { status: 'active', startedAt: now });
-    return { ...s1, stage: t.kind, topic: { ...t.target }, open: null };
+    return { ...s1, stage: t.kind, topic: { ...t.target }, open: null, confusedStreak: 0 }; // 막힘 횟수는 과제마다 새로
+  }
+
+  // 지금 과제를 잠시 내려놓는다 (학생 안건 먼저) — pending으로 돌리고 들은 경험·턴 수는 그대로 둔다
+  static park(s: SessionState): SessionState {
+    const t = activeTask(s);
+    return t ? Tasks.update(s, t.id, { status: 'pending' }) : s;
   }
 
   // 지금 과제를 끝낸다 (done 이외의 끝 — timeout 등)

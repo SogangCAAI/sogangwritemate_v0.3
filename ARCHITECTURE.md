@@ -53,14 +53,14 @@ sequenceDiagram
   participant H as Haiku 5.5 (TurnResponder)
   participant D as TutoringSession
   participant DB as Supabase
-  S->>T: {state, context, history, event}
+  S->>T: {state, context, history, event, ca: {bargeIns, botTurns}}
   T->>T: RequestParser (state·context 다시 세움)
   alt 힌트 칩 (뭐라고요? 등)
     T->>D: 칩 라벨로 판정 (LLM 없음)
   else 말·글자
-    T->>H: 시스템 프롬프트(지금 패턴·과제·다음 칸) + 최근 대화
-    H-->>T: {move, reply, paraphrase, example, opens, exemplar, positive}
-    T->>T: TurnResponder.tidy (2문장 상한 · 학생 질문에 답한 턴의 끝 질문 떼기)
+    T->>H: 시스템 프롬프트(지금 패턴·과제·다음 칸·막힘/다른 요청 횟수·끼어들기) + 최근 대화
+    H-->>T: {move, reply, paraphrase, example, opens, exemplar, positive, importance, targetParagraph}
+    T->>T: TurnResponder.tidy (2문장 상한, 자주 끼어들면 1문장 · 학생 질문에 답한 턴의 끝 질문 떼기)
   end
   T->>D: from(state).handle(judge, event) → 국면.onX
   D-->>T: {state', say, agentAction}
@@ -83,6 +83,8 @@ SessionState
 ├─ last       { played, paraphrase, example } — 수리 요청에 LLM 없이 답할 재료
 ├─ repaired   수리·학생 질문 직후인가 (이때의 "고마워요"는 곁가지만 닫는다, B4.4)
 ├─ unclearStreak  못 알아들은 횟수 (1: 다시 말해 줄래요? · 2: 예시와 함께 · 3: 다른 과제 제안)
+├─ confusedStreak 학생이 연달아 "모르겠어요"(CONFUSED)라고 한 횟수 (1: 단서 · 2: 시범 · 3: 과제 미루고 다음) — 다른 수면 0, 수리는 건너뜀
+├─ offGoalCount   학생이 지금 과제 밖의 것을 하자고 한 횟수 (세션 누적, 0: 겹쳐 받기 · 1+: 학생을 따른다)
 ├─ tasks[3]   { kind: content|form, target, goal, doneWhen, opener, status, evidence, fromExemplar,
 │               startedAt, endedAt, turns, edits, experience[], exemplar, nudged }
 └─ startedAt · helped · closeOffered
@@ -96,7 +98,7 @@ SessionState
 - 과제마다 모델이 `axis`를 적고, 코드가 v2 `decideTargetStage` 규칙으로 순서를 다시 세운다 — 하 → 중 → 상, 같은 등급이면 축 순서.
 - 루브릭은 화면만 들고 있다 (응답 `{state, say, awaitPause, rubric, strengths}`). 턴마다 오가는 상태에는 넣지 않고, DB에는 `sessions.rubric`으로 남긴다.
 
-## 5. 판정 라벨 (Haiku가 고른다, NCF 1차 13개)
+## 5. 판정 라벨 (Haiku가 고른다 — NCF 1차 13개 + v2 caJudge에서 옮긴 2개 = 15개)
 
 | 라벨 | 뜻 | 대화 흐름이 하는 일 (국면별 자세히: `FLOW.md`) |
 |---|---|---|
@@ -107,9 +109,23 @@ SessionState
 | USER_INQUIRY | 학생의 질문 | 답하고 원래 시퀀스 유지 |
 | CLOSER | 인정·감사 | 시퀀스 닫기 (수리 직후면 곁가지만) |
 | ABORT · PRE_CLOSING | 그만 · 끝내자 | 과제 skipped · 마무리(요약 먼저) |
-| UNCLEAR | 못 알아들음 | 단계적 되묻기 |
+| UNCLEAR | 못 알아들음 (튜터가 학생 말을 모름) | 단계적 되묻기 |
+| CONFUSED | 학생이 모르겠다·생각이 안 난다 ("잘 모르겠어요", "이해가 안 돼요") | 막힘 사다리 (`ConfusionHandler`): 1회 단서+같은 질문 · 2회 시범 한 문장 · 3회 과제 미루고 다음 |
+| OFF_GOAL | 지금 과제 말고 다른 것을 먼저 ("3문단 먼저 볼래요") — `importance`·`targetParagraph`를 함께 냄 | `OffGoalHandler`: 첫 요청 겹쳐 받기(lower면 양보+그러나+이유) · higher이거나 거듭 청하면 그 문단의 남은 과제로 바꿈 · 맞는 과제가 없으면 학생 요청에 답함 |
 
-판정 정확도(지어낸 대본 29발화, 다음 행동 기준): 약 90% — `experiments/` 참고.
+판정 정확도(지어낸 대본 29발화, 다음 행동 기준): 약 90% — `experiments/` 참고 (2026-11-03, 15라벨 두 번: 라벨 25–26/29 · 다음 행동 27/29 — 13라벨 때 같은 날 24/29 · 25/29).
+
+### v2 caJudge → v3
+
+v2(`pre-dashboard_code/`)의 CA 판정기는 층1 코드 판정 + 층2 배경 모델 호출 + 층3 행위 표(`CA_ACTION_TABLE`, 플래그 뒤)였다. v3는 **턴 호출 하나**(라벨·말·중요도를 함께)와 **코드의 결정**(`src/conversation/` 클래스)으로 같은 행을 옮겼다. 플래그·추가 호출 없음.
+
+| v2 행 (caJudge.ts `CA_ACTION_TABLE`) | 근거 | v3 |
+|---|---|---|
+| `clue_up` · `exemplar` · `move_on` (notUnderstood streak 1/2/≥3, `dialogueState.ts`) | 이요안 10/09 "한 번 더 설명" · 허윤석·이요안 10/09 모범답안 1개 시범 · 사람 튜터 K20161108 t58 "보류하고 2번" | 라벨 `CONFUSED` + `confusedStreak` → `ConfusionHandler` (1·2회 모델 말, 3회 코드가 `skipped`('학생이 막힘') + `Agenda.proposeNext`) |
+| `sequence_student_first` · `subsume` · `keep_goal` (student_agenda_importance) + `sessionGoal.ts` "한 번만 제안, 그래도 원하면 따른다" | 이요안 10/02 회의 · 10/09 2차 평가 · 사람 거절 30/73, K20161312 t19 "양보+그러나+이유" | 라벨 `OFF_GOAL` + `importance`·`targetParagraph` + `offGoalCount` → `OffGoalHandler` |
+| `shorten` (interruption=high) | 이요안 10/02 "끼어드는 빈도로 판단" · 사람 튜터 코퍼스 겹쳐 시작 비율 p25 0.10 / p75 0.25, 표본 5턴 | 클라이언트 `TutorSpeaker.ca` → 요청 `ca` → `Interruption` (high면 프롬프트 안내 + 1문장 상한), `turns.judge.ca`에 기록 |
+
+v2와 다른 점: 중요도를 한 턴 늦게(배경 호출) 받지 않고 같은 턴에 정한다 · 학생이 집은 '자리'는 과제 문단 번호로만 맞춘다 · 막힘 횟수는 새 과제를 시작하면 0 · 끼어들기가 잦아도 시범 턴은 2문장(받음 + 시범 문장)까지 둔다.
 
 ## 6. 과제 완료 판정 (`/api/evaluate`)
 
@@ -186,7 +202,7 @@ sogang-tutor-v3/
 │  │  ├─ TutoringSession.ts   입구 · 국면과 상관없는 수 · 국면 표
 │  │  ├─ Phase.ts · PhaseFactory.ts   바탕 클래스(템플릿 메서드) · 상태 필드 → 국면
 │  │  ├─ phases/        Briefing · TaskProposal · Experience · Conclusion · Editing · Idle · Closing · Ended
-│  │  └─ RepairHandler.ts · Agenda.ts · Say.ts · Tasks.ts
+│  │  └─ RepairHandler.ts · ConfusionHandler.ts · OffGoalHandler.ts · Interruption.ts · Agenda.ts · Say.ts · Tasks.ts
 │  ├─ server/           서버 전용
 │  │  ├─ handlers/      DiagnoseHandler · TurnHandler · EvaluateHandler · SummaryHandler · TtsHandler
 │  │  ├─ http/Handler.ts      바탕 클래스: 오류 → 봉투 {ok, data, error}
@@ -197,7 +213,7 @@ sogang-tutor-v3/
 │  │  └─ deps.ts        부품 한 벌 조립
 │  ├─ prompts/          tutor.ko/en · diagnose · evaluate · summary (.md)
 │  └─ client/           화면 (8절)
-├─ tests/               decide 표 테스트(대본 목업) · conversation(국면) · sessionController · checks · handlers · validate (node:test)
+├─ tests/               decide 표 테스트(대본 목업) · conversation(국면) · ca(막힘·다른 요청·끼어들기) · sessionController · checks · handlers · validate (node:test)
 ├─ experiments/         판정 정확도 · 판정+응답 · 골드 29발화 · 실제 API 연기 시험
 ├─ supabase/schema.sql · migrations/
 ├─ PRODUCT.md · DESIGN.md · ARCHITECTURE.md · FLOW.md
@@ -208,7 +224,7 @@ sogang-tutor-v3/
 
 ```bash
 npx tsc --noEmit                           # 타입
-npm test                                   # 유닛 79개 (오프라인, LLM 0회)
+npm test                                   # 유닛 108개 (오프라인, LLM 0회)
 npm run build                              # 프로덕션 빌드
 npm run gold                               # 골드 29발화 실제 API (다음 행동 일치율)
 npx tsx experiments/live_smoke.ts <.env>   # 네 함수를 실제 API로 한 번씩

@@ -12,6 +12,7 @@ export const MOVES = [
   'ANSWER', 'CONTINUER', 'ACCEPT', 'REJECT', 'EXEMPLAR_REQ',
   'REPEAT_REQ', 'PARAPHRASE_REQ', 'EXAMPLE_REQ', 'USER_INQUIRY',
   'CLOSER', 'ABORT', 'PRE_CLOSING', 'UNCLEAR',
+  'CONFUSED', 'OFF_GOAL', // v2 caJudge에서 옮김 — 막힘 사다리(ConfusionHandler) · 다른 요청(OffGoalHandler)
 ] as const;
 export type Move = (typeof MOVES)[number];
 
@@ -24,6 +25,17 @@ export type Pattern = (typeof PATTERNS)[number];
 
 // 코드가 뜻을 정해 둔 제안 — 수락하면 next()가 상태를 옮긴다
 export type Effect = 'startTask' | 'moveOn' | 'close';
+
+// OFF_GOAL일 때 학생이 원하는 것이 지금 과제보다 중요한가 (v2 student_agenda_importance). OFF_GOAL이 아니면 none
+export const IMPORTANCES = ['higher', 'equal', 'lower', 'none'] as const;
+export type Importance = (typeof IMPORTANCES)[number];
+
+// 끼어들기 집계 — 클라이언트가 세션 누적으로 매 턴 보낸다 (v2 CASummary)
+//   botTurns = 소리가 실제로 시작된 튜터 줄 · bargeIns = 학생이 말을 덮어 끊은 줄
+export interface CaCounts {
+  readonly bargeIns: number;
+  readonly botTurns: number;
+}
 
 export interface Open {
   readonly pattern: Pattern;
@@ -72,6 +84,8 @@ export interface SessionState {
   readonly last: Last;
   readonly repaired: boolean; // 수리·학생 질문 직후 — 이때의 CLOSER는 그 곁가지만 닫는다 (B4.4)
   readonly unclearStreak: number;
+  readonly confusedStreak: number; // 학생이 연달아 "모르겠어요"(CONFUSED)라고 한 횟수 — 다른 수가 오면 0 (수리는 제외)
+  readonly offGoalCount: number; // 학생이 지금 과제 밖의 것을 하자고 한 횟수 (세션 누적)
   readonly tasks: readonly Task[];
   readonly startedAt: number;
   readonly helped: boolean | null;
@@ -87,6 +101,8 @@ export interface Judge {
   readonly opens: Pattern | 'none';
   readonly exemplar: string;
   readonly positive: boolean; // 성공 확인(C4.6)에 대한 답이 긍정인가
+  readonly importance: Importance; // OFF_GOAL 전용 — 학생 안건 대 지금 과제
+  readonly targetParagraph: number; // OFF_GOAL 전용 — 학생이 집은 문단 (1부터, 없으면 0)
 }
 
 export interface Verdict {
@@ -116,5 +132,5 @@ export function activeTask(s: SessionState): Task | undefined {
 }
 
 export function emptyJudge(move: Move): Judge {
-  return { move, reply: '', paraphrase: '', example: '', opens: 'none', exemplar: '', positive: false };
+  return { move, reply: '', paraphrase: '', example: '', opens: 'none', exemplar: '', positive: false, importance: 'none', targetParagraph: 0 };
 }

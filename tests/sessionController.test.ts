@@ -46,3 +46,12 @@ test('요청이 겹치면 두 번째는 보내지 않는다', async () => {
   await Promise.all([ctl.send({ kind: 'pause' }), ctl.send({ kind: 'pause' }), ctl.saveEdit(2, 'x')]);
   assert.equal(seen.length, 1);
 });
+
+test('끼어들기 집계를 매 턴 함께 보낸다 (음성이 없으면 0/0)', async () => {
+  const seen: { ca: unknown }[] = [];
+  const ctl = new SessionController(start(), fakeApi({ state: fresh(), say: null, awaitPause: false }, seen));
+  await ctl.send({ kind: 'pause' });
+  ctl.attachVoice({ speak: () => 1, stop: () => {}, ca: () => ({ bargeIns: 2, botTurns: 8 }) });
+  await ctl.send({ kind: 'pause' });
+  assert.deepEqual(seen.map((b) => b.ca), [{ bargeIns: 0, botTurns: 0 }, { bargeIns: 2, botTurns: 8 }]);
+});

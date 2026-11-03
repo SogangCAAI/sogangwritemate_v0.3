@@ -1,6 +1,6 @@
 // 클라이언트 요청 검사 — 본문·상태·글 맥락·대화 기록. 클라이언트가 보낸 상태를 그대로 믿지 않고 모양을 다시 세운다 (모르는 필드는 버림)
 import {
-  type Lang, type Open, type SessionState, type Stage, type Task, type TaskKind, type TaskStatus,
+  type CaCounts, type Lang, type Open, type SessionState, type Stage, type Task, type TaskKind, type TaskStatus,
   PATTERNS,
 } from '../../state';
 import { bool, fail, num, obj, oneOf, optNum, optStr, str, strList, ValidationError, type Obj } from './fields';
@@ -12,6 +12,12 @@ const STATUSES: readonly TaskStatus[] = ['pending', 'active', 'done', 'skipped',
 
 export interface Context { posting: string; paragraphs: string[] }
 export interface Line { who: 'tutor' | 'student'; text: string }
+
+// 0 이상의 정수
+function count(x: unknown, name: string): number {
+  const n = num(x, name);
+  return Number.isInteger(n) && n >= 0 ? n : fail(`${name}: 0 이상의 정수가 아니에요.`);
+}
 
 function parseTask(x: unknown, i: number): Task {
   const t = obj(x, `tasks[${i}]`);
@@ -76,11 +82,21 @@ export class RequestParser {
       last: { played: str(last.played, 'last.played'), paraphrase: str(last.paraphrase, 'last.paraphrase'), example: str(last.example, 'last.example') },
       repaired: bool(s.repaired, 'state.repaired'),
       unclearStreak: num(s.unclearStreak, 'state.unclearStreak'),
+      // 2026-11-03에 더한 칸 — 예전 상태에는 없으니 0으로 본다
+      confusedStreak: s.confusedStreak === undefined ? 0 : count(s.confusedStreak, 'state.confusedStreak'),
+      offGoalCount: s.offGoalCount === undefined ? 0 : count(s.offGoalCount, 'state.offGoalCount'),
       tasks: s.tasks.map(parseTask),
       startedAt: num(s.startedAt, 'state.startedAt'),
       helped: s.helped === null ? null : bool(s.helped, 'state.helped'),
       closeOffered: bool(s.closeOffered, 'state.closeOffered'),
     };
+  }
+
+  // 끼어들기 집계 (선택) — 없으면 0/0 (표본 부족 = 짧게 하지 않음)
+  static ca(x: unknown): CaCounts {
+    if (x === undefined || x === null) return { bargeIns: 0, botTurns: 0 };
+    const c = obj(x, 'ca');
+    return { bargeIns: count(c.bargeIns, 'ca.bargeIns'), botTurns: count(c.botTurns, 'ca.botTurns') };
   }
 
   static context(x: unknown): Context {

@@ -10,6 +10,9 @@ const KO = {
   noExample: '그건 예를 들기 어렵네요.',
   askAgain: '한 번만 더 말해 줄래요?',
   giveUpUnclear: '이건 나중에 다시 봐요. 다른 문장부터 고쳐 볼까요?',
+  stuckMoveOn: '이건 나중에 다시 봐요. 다음으로 넘어갈게요.', // 막힘 3회 (v2 move_on)
+  stuckEvidence: '학생이 막힘',
+  switchTask: '좋아요, 그것부터 봐요. 하던 건 나중에 다시 해요.', // 학생 안건 먼저 (v2 sequence_student_first)
   abortTask: "네, 여기까지 할게요. 요약에 '다음에 볼 것'으로 남길게요.",
   abortBriefing: '네, 바로 시작할게요.',
   exemplarDone: '네, 시범 문장이 들어갔어요.',
@@ -33,6 +36,9 @@ const EN: typeof KO = {
   noExample: "I don't have a good example for that.",
   askAgain: 'Could you say that once more?',
   giveUpUnclear: "Let's come back to this later. Shall we work on another sentence first?",
+  stuckMoveOn: "Let's come back to this later. We'll move on for now.",
+  stuckEvidence: 'student was stuck',
+  switchTask: "Sure, let's do that first. We'll come back to this one later.",
   abortTask: "Okay, let's stop here. I'll list it under 'next time' in the summary.",
   abortBriefing: "Okay, let's get started.",
   exemplarDone: 'Good, the sample sentence is in.',
