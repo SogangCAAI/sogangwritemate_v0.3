@@ -38,7 +38,10 @@ export function Session({ start, onFinish }: { start: Start; onFinish: (s: Sessi
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => logEnd.current?.scrollIntoView({ block: 'end' }), [log]);
+  // 중괄호 필수 — 최신 Chrome의 scrollIntoView는 Promise를 돌려주고, effect가 그걸 반환하면 React가 정리 함수로 불러 화면이 통째로 죽는다
+  useEffect(() => {
+    logEnd.current?.scrollIntoView({ block: 'end' });
+  }, [log]);
 
   function apply(r: TurnResult) {
     setState(r.state);

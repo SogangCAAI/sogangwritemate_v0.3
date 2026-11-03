@@ -13,8 +13,3 @@
   targetPort = 5173
   port = 8888
   autoLaunch = false
-
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
