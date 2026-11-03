@@ -1,0 +1,116 @@
+// 세션 상태와 판정 타입 — 근거: NCF 문서 5절, v3 제안서 2-1절
+// 서버는 상태를 들고 있지 않는다. 클라이언트가 매 턴 이 객체를 보내고, 새 객체를 돌려받는다.
+
+export type Lang = 'ko' | 'en';
+
+// 'ended'는 문서에 없다 — 성공 확인(C4.6)이 끝났다는 표시가 따로 필요해서 더했다
+export type Stage = 'opening' | 'briefing' | 'content' | 'form' | 'closing' | 'ended';
+
+export const MOVES = [
+  'ANSWER', 'CONTINUER', 'ACCEPT', 'REJECT', 'EXEMPLAR_REQ',
+  'REPEAT_REQ', 'PARAPHRASE_REQ', 'EXAMPLE_REQ', 'USER_INQUIRY',
+  'CLOSER', 'ABORT', 'PRE_CLOSING', 'UNCLEAR',
+] as const;
+export type Move = (typeof MOVES)[number];
+
+// 힌트 칩이 바로 보내는 라벨 — 이때는 판정 호출을 하지 않는다
+export const CHIP_MOVES = ['REPEAT_REQ', 'PARAPHRASE_REQ', 'EXAMPLE_REQ', 'ABORT'] as const satisfies readonly Move[];
+
+// 튜터가 연 첫째 짝의 종류 (= previous_node)
+export const PATTERNS = ['A3', 'A5.1', 'A5.0', 'A5.5', 'A2.6', 'P1', 'P1.4', 'C4'] as const;
+export type Pattern = (typeof PATTERNS)[number];
+
+// 코드가 뜻을 정해 둔 제안 — 수락하면 next()가 상태를 옮긴다
+export type Effect = 'startTask' | 'moveOn' | 'close';
+
+export interface Open {
+  pattern: Pattern;
+  firstPair: string;
+  parts?: string[]; // A3 전용: 브리핑·마무리 파트
+  part?: number;
+  effect?: Effect;
+  taskId?: string;
+}
+
+export type TaskStatus = 'pending' | 'active' | 'done' | 'skipped' | 'timeout';
+export type TaskKind = 'content' | 'form';
+
+export interface Task {
+  id: string;
+  order: 1 | 2 | 3;
+  kind: TaskKind;
+  target: { keyword?: string; paragraph: number }; // paragraph는 1부터
+  goal: string; // 학생에게 보여 줄 짧은 명사구 ("2문단에 협업 경험 넣기")
+  doneWhen: string;
+  status: TaskStatus;
+  evidence?: string;
+  fromExemplar: boolean;
+  startedAt?: number;
+  endedAt?: number;
+  turns: number;
+  edits: number;
+  experience: string[]; // 학생 답 원문 (A5.1/A5.5)
+  exemplar?: string; // 튜터가 준 시범 문장 — 그대로 들어가면 재평가 없이 done
+  nudged: boolean; // 시간 초과 제안을 이미 했나
+}
+
+export interface Last {
+  played: string;
+  paraphrase: string;
+  example: string;
+}
+
+export interface SessionState {
+  id: string;
+  lang: Lang;
+  stage: Stage;
+  open: Open | null;
+  topic: { keyword?: string; paragraph?: number };
+  last: Last;
+  repaired: boolean; // 수리·학생 질문 직후 — 이때의 CLOSER는 그 곁가지만 닫는다 (B4.4)
+  unclearStreak: number;
+  tasks: Task[];
+  startedAt: number;
+  helped: boolean | null;
+  closeOffered: boolean; // 세션 마감 제안을 이미 했나
+}
+
+// Haiku 한 번이 내는 것: 판정 + 튜터의 다음 말 + 수리용 콘텐츠
+export interface Judge {
+  move: Move;
+  reply: string;
+  paraphrase: string;
+  example: string;
+  opens: Pattern | 'none';
+  exemplar: string;
+  positive: boolean; // 성공 확인(C4.6)에 대한 답이 긍정인가
+}
+
+export interface Verdict {
+  better: boolean;
+  reason: string;
+}
+
+export type TurnEvent =
+  | { kind: 'say'; text: string; now: number }
+  | { kind: 'pause'; now: number }
+  // verdict가 null이면 재평가하지 않은 편집 (시범 문장 그대로, 또는 대상 밖 문단)
+  | { kind: 'edit'; paragraph: number; after: string; verdict: Verdict | null; now: number };
+
+export interface Outcome {
+  state: SessionState;
+  say: string | null;
+  agentAction: string; // turns.agent_action 기록용
+}
+
+export const SESSION_MS = 20 * 60_000;
+export const TASK_BUDGET_MS = 5 * 60_000;
+export const CLOSE_WARN_MS = 3 * 60_000; // 남은 시간이 이만큼이면 마무리를 제안
+
+export function activeTask(s: SessionState): Task | undefined {
+  return s.tasks.find((t) => t.status === 'active');
+}
+
+export function emptyJudge(move: Move): Judge {
+  return { move, reply: '', paraphrase: '', example: '', opens: 'none', exemplar: '', positive: false };
+}
