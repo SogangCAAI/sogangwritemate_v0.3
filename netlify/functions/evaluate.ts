@@ -38,7 +38,7 @@ export default (req: Request) =>
         system: 'You judge one paragraph revision against one criterion.',
         user: fill(loadPrompt('evaluate.md'), { doneWhen: task.doneWhen, original, edited, lang: langName(state.lang) }),
       });
-      const v = fromLlm('evaluate', () => parseVerdict(raw));
+      const v = fromLlm('evaluate', () => parseVerdict(raw), raw);
       verdict = { ...v, reason: capSentences(v.reason, 2) };
     }
 

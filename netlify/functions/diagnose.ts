@@ -73,7 +73,7 @@ export default (req: Request) =>
         cliches: hits.map((h) => `${h.paragraph}문단 "${h.text}" (${h.label})`).join('\n') || '-',
       }),
     });
-    const d = fromLlm('diagnose', () => parseDiagnosis(raw, ctx.paragraphs.length));
+    const d = fromLlm('diagnose', () => parseDiagnosis(raw, ctx.paragraphs.length), raw);
     const state = newSession({ id: randomUUID(), lang, tasks: d.tasks, briefing: d.briefing, now: Date.now() });
 
     await saveSession({ id: state.id, lang, posting: ctx.posting, essay: ctx.paragraphs, tasks: state.tasks });

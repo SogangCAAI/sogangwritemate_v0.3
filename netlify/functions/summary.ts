@@ -38,7 +38,7 @@ export default (req: Request) =>
       system: 'You write an honest end-of-session summary for a student.',
       user: fill(loadPrompt('summary.md'), { lang: langName(state.lang), table, original: essayText(original), final: essayText(final) }),
     });
-    const summary = fromLlm('summary', () => parseSummary(raw));
+    const summary = fromLlm('summary', () => parseSummary(raw), raw);
 
     await saveSession({
       id: state.id, lang: state.lang, posting, essay: original, tasks: state.tasks,

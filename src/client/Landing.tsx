@@ -16,8 +16,12 @@ export interface Start {
 const MAX_PARAGRAPHS = 20;
 const PREVIEW_CHARS = 28;
 
-// 빈 줄로 문단을 나눈다
-const toParagraphs = (text: string) => text.split(/\n\s*\n/).map((p) => p.replace(/\s+/g, ' ').trim()).filter(Boolean);
+// 빈 줄로 문단을 나눈다. 빈 줄이 하나도 없으면 줄바꿈 한 번을 문단 경계로 본다 (자소서를 그렇게 붙여 넣는 경우가 많다)
+const toParagraphs = (text: string) => {
+  const clean = (ps: string[]) => ps.map((p) => p.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const byBlank = clean(text.split(/\n\s*\n/));
+  return byBlank.length > 1 ? byBlank : clean(text.split(/\n/));
+};
 const folio = (n: number) => String(n).padStart(2, '0');
 const clip = (p: string) => (p.length > PREVIEW_CHARS ? `${p.slice(0, PREVIEW_CHARS)}…` : p);
 

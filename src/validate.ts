@@ -193,8 +193,8 @@ export function parseDiagnosis(x: unknown, paragraphCount: number): Diagnosis {
   if (briefing.length !== 3) fail('diagnosis.briefing: 파트가 3개가 아니에요.');
   const raw = taskList.map((v, i) => {
     const t = obj(v, `diagnosis.tasks[${i}]`);
-    const paragraph = num(t.paragraph, 'task.paragraph');
-    if (!Number.isInteger(paragraph) || paragraph < 1 || paragraph > paragraphCount) fail('task.paragraph: 글에 없는 문단이에요.');
+    // 글 범위를 벗어난 문단 번호는 실패 대신 범위 안으로 맞춘다 (모델 출력이라 보정한다)
+    const paragraph = Math.min(Math.max(Math.round(num(t.paragraph, 'task.paragraph')), 1), paragraphCount);
     return {
       kind: oneOf(t.kind, KINDS, 'task.kind'),
       paragraph,

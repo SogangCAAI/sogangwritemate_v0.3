@@ -46,3 +46,8 @@ test('진단: 모델이 쓴 긴 과제 이름은 실패 대신 자른다', () =>
   const d = parseDiagnosis({ ...r, tasks: [{ ...task(1), goal: long }, task(2), task(3)] }, 3);
   assert.equal(d.tasks[0]?.goal.length, 120);
 });
+
+test('진단: 글 범위를 벗어난 과제 문단 번호는 범위 안으로 맞춘다', () => {
+  const d = parseDiagnosis({ ...raw([]), tasks: [task(0), task(2), task(7)] }, 3);
+  assert.deepEqual(d.tasks.map((t) => t.target.paragraph).sort(), [1, 2, 3]);
+});

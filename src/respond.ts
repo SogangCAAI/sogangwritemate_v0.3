@@ -6,12 +6,16 @@ import { TURN_TOOL, turnSystem, turnUser } from './prompt';
 import type { Judge, SessionState } from './state';
 import { parseJudge, ValidationError, type Context, type Line } from './validate';
 
-// LLM 출력이 형식 밖이면 사용자에게는 '다시 보내 주세요'로 보인다
-export function fromLlm<T>(name: string, parse: () => T): T {
+// LLM 출력이 형식 밖이면 사용자에게는 '다시 보내 주세요' + 어느 칸인지 짧게 (원인을 화면에서 바로 알 수 있게).
+// 모델 출력 앞부분은 서버 로그에만 남긴다.
+export function fromLlm<T>(name: string, parse: () => T, raw?: unknown): T {
   try {
     return parse();
   } catch (e) {
-    if (e instanceof ValidationError) throw new LlmError(`${name} 형식 밖 출력: ${e.message}`, '튜터가 답을 잘못 만들었어요. 다시 보내 주세요.');
+    if (e instanceof ValidationError) {
+      console.error(`[${name}] 형식 밖 출력:`, e.message, JSON.stringify(raw ?? null).slice(0, 1500));
+      throw new LlmError(`${name} 형식 밖 출력: ${e.message}`, `튜터가 답을 잘못 만들었어요. 다시 보내 주세요. (${name} · ${e.message})`);
+    }
     throw e;
   }
 }
@@ -21,7 +25,7 @@ export async function respond(s: SessionState, ctx: Context, history: Line[], te
     model: MODELS.turn, maxTokens: 700, tool: TURN_TOOL,
     system: turnSystem(s, ctx), user: turnUser(history, text, s.lang),
   });
-  const j = fromLlm('respond', () => parseJudge(raw));
+  const j = fromLlm('respond', () => parseJudge(raw), raw);
   return tidy(j.reply ? j : { ...j, reply: lines(s.lang).ok });
 }
 
