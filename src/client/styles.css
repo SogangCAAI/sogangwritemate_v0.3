@@ -8,6 +8,15 @@
   --rule: #d8d3c8;
   --red: #b3261e; /* 하나뿐인 빨강 — 지금 과제와 지금 고칠 문단에만 */
   --on-ink: var(--paper);
+  /* 역할 색 — 누가 말하나·무엇인가를 색으로 가른다 (DESIGN.md '역할 색') */
+  --tutor: #1d4e89;        /* 튜터의 말 · 진단(튜터의 평가) — 편집자 남색 */
+  --tutor-tint: #e6edf6;
+  --student: #1f6b4a;      /* 학생의 말 — 초록 */
+  --student-tint: #e2efe7;
+  --sheet: #fdfcf9;        /* 글 지면 — 바탕보다 밝은 종이 */
+  --ev-good: #2e6b3f;      /* 근거 충분 */
+  --ev-warn: #8a5300;      /* 근거 약함·없음 — 빨강은 지금 과제 전용이라 황토 */
+  --ev-warn-tint: #f6ead6;
 
   --sans: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', system-ui, sans-serif;
   --serif: 'Noto Serif KR', 'AppleMyungjo', serif;
@@ -31,6 +40,14 @@
     --rule: #3a3833;
     --red: #ef6a5f;
     --on-ink: #181715;
+    --tutor: #9cc0ee;
+    --tutor-tint: #1d2633;
+    --student: #8fd3b0;
+    --student-tint: #182a21;
+    --sheet: #1e1c19;
+    --ev-good: #8fd3a0;
+    --ev-warn: #e3ad62;
+    --ev-warn-tint: #33281a;
     color-scheme: dark;
   }
 }
@@ -325,3 +342,24 @@ textarea:focus-visible, input:not([type='radio']):focus-visible { outline: none;
 .ev-none .ev { color: var(--paper); background: var(--ink); border-color: var(--ink); }
 .diag-note { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
 .sum-diag .diag { max-width: 46rem; margin-bottom: 0; }
+
+/* ── 역할 색 ── */
+/* 글 지면: 바탕보다 밝은 종이 한 장 */
+.desk { background: var(--sheet); }
+/* 진단 평가: 튜터의 편집 메모 — 남색 바탕 카드로 글과 구별 */
+.diag { background: var(--tutor-tint); border-top-color: var(--tutor); padding: 0 var(--s5) var(--s2); border-bottom: 0; }
+.diag-kicker, .diag-toggle::after { color: var(--tutor); }
+.diag-claims { border-top-color: color-mix(in srgb, var(--tutor) 25%, transparent); }
+.diag-claim { border-bottom-color: color-mix(in srgb, var(--tutor) 18%, transparent); }
+.ev-strong .ev { color: var(--ev-good); }
+.ev-weak .ev { color: var(--ev-warn); border-style: dashed; background: transparent; }
+.ev-none .ev { color: var(--ev-warn); background: var(--ev-warn-tint); border-color: var(--ev-warn); }
+/* 대화: 튜터는 남색, 학생은 초록 — 지난 대화도 말풍선으로 */
+.ln { padding: var(--s2) var(--s3); border-radius: 6px; max-width: 88%; }
+.ln-tutor { align-self: flex-start; background: var(--tutor-tint); color: var(--tutor); }
+.ln-student { align-self: flex-end; background: var(--student-tint); color: var(--student); }
+.ln b { color: inherit; }
+.now .who, .now .cap { color: var(--tutor); }
+.now.is-thinking .cap { color: var(--grey); }
+.you .who, .you .cap { color: var(--student); }
+.caret { background: var(--student); }
