@@ -9,7 +9,7 @@ import { LlmOutputParser, TURN_TOOL } from '../parse/LlmOutputParser';
 import type { Context, Line } from '../parse/RequestParser';
 
 const NO_CA: CaCounts = { bargeIns: 0, botTurns: 0 };
-const CODE_SERVED = new Set(['REPEAT_REQ', 'PARAPHRASE_REQ', 'EXAMPLE_REQ']);
+const CODE_SERVED = new Set(['REPEAT_REQ', 'PARAPHRASE_REQ', 'EXAMPLE_REQ', 'ABORT', 'PRE_CLOSING']); // 코드가 말하는 수 — 붙일 필요 없다
 const QUESTION_END = /[?？]["”’']?\s*$/;
 
 export class TurnResponder {
