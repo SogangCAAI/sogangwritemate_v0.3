@@ -126,6 +126,7 @@ SessionState
 | 턴 | `claude-haiku-5-5` | low | 12초 | 판정 + 튜터 말 |
 | 재평가 | `claude-haiku-5-5` | low | 12초 | {better, reason} |
 | 요약 | `claude-sonnet-5-5` | medium | 22초 | {report, nextSteps} |
+| 튜터 목소리 | Google TTS `Chirp3-HD` (ko Autonoe · en Aoede) | — | 8초 | MP3 (`/api/tts`) |
 
 - 모두 **구조화된 출력**(`output_config.format` json_schema)으로 받는다. Sonnet 5.5는 강제 `tool_choice`를 받지 않기 때문이다. 스키마는 보내기 전에 `additionalProperties:false`로 닫고 지원 안 되는 `minItems/maxItems`를 뺀다 — 개수 검사는 `validate.ts`가 응답 뒤에 한다.
 - 5.5 모델은 생각 토큰도 `max_tokens`에 들어가므로 출력 상한에 여유(6000)를 더한다. `temperature`는 보내지 않는다.
@@ -143,7 +144,7 @@ SessionState
 | `EssayPanel.tsx` · `AutoTextarea.tsx` | 글 전체를 문서로, 지금 문단은 늘 편집 가능, 다른 문단은 눌러서 고침 |
 | `DiagnosisNote.tsx` | 첫 진단 평가 (편집 메모) — 세션에선 브리핑 동안 펼침·과제 시작 후 접힘, 요약에서 다시 |
 | `VoicePanel.tsx` · `MicDesk.tsx` | 튜터의 지금 말(큰 자막) · 학생 실시간 자막 · 마이크 상태 · 말하기 힌트 · 글자 입력 보조 |
-| `voice.ts` | 음성 훅 — 브라우저 SpeechRecognition + speechSynthesis, 끼어들기 시 튜터 말 멈춤, 메아리 거르기 |
+| `voice.ts` | 음성 훅 — 학생: 브라우저 SpeechRecognition / 튜터: `/api/tts`(Google TTS)를 `<audio>`로 재생, 없으면 speechSynthesis. 메아리 제거 세 겹(반이중 인식 · 메아리 제거 마이크로 끼어들기 감지 · 끝난 직후 글자 겹침 거르기) |
 | `Summary.tsx` | 과제 표 · 튜터의 정리 · 처음 진단 · 처음 글/끝 글 |
 | `styles.css` | 디자인 토큰(라이트/다크) — 규칙은 `DESIGN.md` |
 
@@ -194,7 +195,7 @@ npx netlify-cli dev                        # 로컬 http://localhost:8888
 ## 12. 알려진 한계 · 다음 단계
 
 - **음성은 브라우저 내장 엔진.** Chrome 음성 인식은 구글 서버를 거친다. 연구실 lab-server로 바꿀 때 `src/client/voice.ts`만 교체한다.
-- 스피커로 쓰면 튜터 목소리가 학생 말로 잡힐 수 있다 (메아리 거르기는 근사치) — 이어폰 권장.
+- 메아리: 튜터가 말하는 동안은 인식을 끄고(반이중), 끼어들기는 Chrome 메아리 제거가 걸린 마이크 소리 크기로 잡는다. 끼어든 첫 음절 일부는 인식이 다시 켜지기 전이라 놓칠 수 있다. 서버 TTS가 없으면(브라우저 음성) 메아리 제거가 약해 끼어들기 문턱을 높인다.
 - 판정 정확도는 지어낸 대본 기준이다. 사람 튜터 코퍼스의 실제 학생 발화로는 아직 재지 않았다.
 - 재평가는 한 번 호출이라 같은 입력에도 판정이 흔들릴 수 있다 — 흔들리면 순서를 바꿔 두 번 묻는 방식으로 되돌린다.
 - Netlify 함수 시간 제한을 26초로 올려야 진단(Sonnet)이 안전하다.

@@ -1,6 +1,13 @@
-// shortcut: 브라우저 내장 음성 — 연구실 lab-server 엔진으로 바꿀 때 이 파일만 교체
-// 학생 말 = SpeechRecognition(실시간 자막 + 확정 결과), 튜터 말 = speechSynthesis.
-// 튜터가 말하는 동안 들은 것은 턴으로 보내지 않는다 — 다만 튜터 말의 메아리가 아닌 말이 들리면(끼어들기) 튜터 말을 바로 끊는다.
+// shortcut: 브라우저 내장 음성 인식 — 연구실 lab-server 엔진으로 바꿀 때 이 파일만 교체
+// 학생 말 = SpeechRecognition(실시간 자막 + 확정 결과). 튜터 말 = 서버 TTS(/api/tts)를 <audio>로 재생,
+// 서버 음성이 없으면 브라우저 내장 speechSynthesis.
+//
+// 메아리 제거 세 겹:
+//  1. 튜터가 말하는 동안 음성 인식을 끈다 (반이중) — 튜터 목소리가 학생 말로 받아 적힐 길이 없다.
+//  2. 끼어들기는 echoCancellation이 켜진 마이크의 소리 크기로 잡는다. 튜터 목소리를 <audio>로 재생해야
+//     Chrome의 메아리 제거가 그 소리를 기준 신호로 삼아 걸러 낸다 (OS가 재생하는 speechSynthesis는 못 거른다
+//     — 그때는 문턱을 높인다).
+//  3. 튜터 말이 끝난 직후 늦게 들어온 메아리는 글자 겹침으로 한 번 더 거른다.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Lang } from '../state';
 
@@ -27,8 +34,13 @@ const SUBMIT_SILENCE_MS = 1200; // 확정된 말 뒤에 이만큼 조용하면 �
 const RESTART_MS = 300; // 브라우저가 듣기를 스스로 끝내면 잠깐 쉬고 다시 켠다
 const ECHO_TAIL_MS = 1500; // 튜터 말이 끝난 뒤에도 늦게 오는 메아리를 걸러 낸다
 const ECHO_OVERLAP = 0.6; // 들은 말의 글자쌍이 이만큼 튜터 말에 있으면 메아리로 본다
-const SPEECH_MS_PER_CHAR = 250; // end 이벤트가 오지 않을 때를 대비한 안전 시간
+const SPEECH_MS_PER_CHAR = 250; // 끝 이벤트가 오지 않을 때를 대비한 안전 시간
 const SPEECH_MS_BASE = 3000;
+// 끼어들기: 메아리 제거된 마이크 소리(RMS)가 문턱을 이만큼 넘게 이어지면 학생이 말을 시작한 것으로 본다
+const BARGE = { server: 0.03, browser: 0.1 } as const; // speechSynthesis는 메아리 제거가 안 돼 문턱을 높인다
+const BARGE_HOLD_MS = 300;
+const BARGE_ONSET_MS = 400; // 재생 시작 직후의 튀는 소리는 무시한다
+const BARGE_POLL_MS = 50;
 
 function recognizerCtor(): RecognizerCtor | null {
   if (typeof window === 'undefined') return null;
@@ -36,7 +48,7 @@ function recognizerCtor(): RecognizerCtor | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
-const ttsAvailable = () => typeof window !== 'undefined' && 'speechSynthesis' in window;
+const synthAvailable = () => typeof window !== 'undefined' && 'speechSynthesis' in window;
 
 const squash = (t: string) => t.toLowerCase().replace(/[\s.,?!'"“”‘’…·-]/g, '');
 
@@ -62,6 +74,17 @@ function pickVoice(locale: string): SpeechSynthesisVoice | undefined {
   return voices.find((v) => v.lang === locale) ?? voices.find((v) => v.lang.startsWith(locale.slice(0, 2)));
 }
 
+// 서버 TTS — 실패하면 null (브라우저 음성으로 돌아간다)
+async function fetchTts(text: string, lang: Lang): Promise<string | null> {
+  try {
+    const res = await fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, lang }) });
+    const env = (await res.json().catch(() => null)) as { ok: boolean; data: { audio: string } | null } | null;
+    return env?.ok && env.data?.audio ? env.data.audio : null;
+  } catch {
+    return null;
+  }
+}
+
 interface Options {
   lang: Lang;
   thinking: boolean; // 서버 답을 기다리는 중 — 듣지 않는다
@@ -85,7 +108,6 @@ export interface Voice {
 
 export function useVoice({ lang, thinking, hold, onFinal }: Options): Voice {
   const [canListen] = useState(() => recognizerCtor() !== null);
-  const [canSpeak] = useState(ttsAvailable);
   const [micOn, setMicOn] = useState(true);
   const [speaking, setSpeaking] = useState(false);
   const [interim, setInterim] = useState('');
@@ -93,10 +115,12 @@ export function useVoice({ lang, thinking, hold, onFinal }: Options): Voice {
   const [error, setError] = useState('');
 
   const lineRef = useRef(''); // 지금(또는 방금) 말한 튜터 줄 — 메아리 판별용
-  const speakingRef = useRef(false);
   const spokeUntil = useRef(0);
   const nextId = useRef(0);
   const currentId = useRef(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const modeRef = useRef<'server' | 'browser'>('server');
+  const startedAt = useRef(0);
   const safety = useRef<ReturnType<typeof setTimeout>>(undefined);
   const pending = useRef('');
   const submitTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -107,7 +131,7 @@ export function useVoice({ lang, thinking, hold, onFinal }: Options): Voice {
     if (currentId.current !== id) return;
     currentId.current = 0;
     clearTimeout(safety.current);
-    speakingRef.current = false;
+    audioRef.current = null;
     spokeUntil.current = Date.now();
     setSpeaking(false);
     setEndedId(id);
@@ -115,15 +139,15 @@ export function useVoice({ lang, thinking, hold, onFinal }: Options): Voice {
 
   const stop = useCallback(() => {
     const id = currentId.current;
-    if (!id || !ttsAvailable()) return;
-    window.speechSynthesis.cancel();
+    if (!id) return;
+    audioRef.current?.pause();
+    if (synthAvailable()) window.speechSynthesis.cancel();
     finishLine(id);
   }, [finishLine]);
 
-  const speak = useCallback((text: string) => {
-    if (!ttsAvailable() || !text.trim()) return 0;
-    stop();
-    const id = ++nextId.current;
+  const speakWithBrowser = useCallback((id: number, text: string) => {
+    if (!synthAvailable()) return finishLine(id);
+    modeRef.current = 'browser';
     const locale = LOCALE[lang];
     const u = new SpeechSynthesisUtterance(text);
     u.lang = locale;
@@ -131,23 +155,80 @@ export function useVoice({ lang, thinking, hold, onFinal }: Options): Voice {
     if (voice) u.voice = voice;
     u.onend = () => finishLine(id);
     u.onerror = () => finishLine(id);
+    window.speechSynthesis.speak(u);
+  }, [lang, finishLine]);
+
+  const speak = useCallback((text: string) => {
+    if (!text.trim()) return 0;
+    stop();
+    const id = ++nextId.current;
     currentId.current = id;
     lineRef.current = text;
-    speakingRef.current = true;
+    startedAt.current = Date.now();
     setSpeaking(true);
     clearTimeout(safety.current);
     safety.current = setTimeout(() => finishLine(id), SPEECH_MS_BASE + text.length * SPEECH_MS_PER_CHAR);
-    window.speechSynthesis.speak(u);
+    void fetchTts(text, lang).then((audio) => {
+      if (currentId.current !== id) return; // 그새 멈췄거나 다음 줄로 넘어갔다
+      if (!audio) return speakWithBrowser(id, text);
+      modeRef.current = 'server';
+      const el = new Audio(`data:audio/mpeg;base64,${audio}`);
+      audioRef.current = el;
+      startedAt.current = Date.now();
+      el.onended = () => finishLine(id);
+      el.onerror = () => speakWithBrowser(id, text);
+      el.play().catch(() => speakWithBrowser(id, text)); // 자동 재생이 막히면 브라우저 음성으로
+    });
     return id;
-  }, [lang, stop, finishLine]);
+  }, [lang, stop, finishLine, speakWithBrowser]);
 
   // 화면을 떠나면 말을 멈춘다
   useEffect(() => () => {
     clearTimeout(safety.current);
-    if (ttsAvailable()) window.speechSynthesis.cancel();
+    audioRef.current?.pause();
+    if (synthAvailable()) window.speechSynthesis.cancel();
   }, []);
 
-  const running = canListen && micOn && !hold && !thinking;
+  // ── 끼어들기 감지: 튜터가 말하는 동안만, 메아리 제거된 마이크 소리 크기로 ──
+  const micStream = useRef<Promise<MediaStream | null> | null>(null);
+  useEffect(() => () => {
+    void micStream.current?.then((s) => s?.getTracks().forEach((t) => t.stop()));
+  }, []);
+
+  useEffect(() => {
+    if (!speaking || !micOn || !canListen || !navigator.mediaDevices?.getUserMedia) return;
+    micStream.current ??= navigator.mediaDevices
+      .getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+      .catch(() => null); // 권한이 없으면 끼어들기 감지 없이 반이중으로만 — '튜터 말 멈추기' 버튼은 남는다
+    let alive = true;
+    let ctx: AudioContext | null = null;
+    let poll: ReturnType<typeof setInterval> | undefined;
+    void micStream.current.then((stream) => {
+      if (!alive || !stream) return;
+      ctx = new AudioContext();
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      const buf = new Float32Array(analyser.fftSize);
+      let loudSince = 0;
+      poll = setInterval(() => {
+        if (Date.now() - startedAt.current < BARGE_ONSET_MS) return;
+        analyser.getFloatTimeDomainData(buf);
+        const rms = Math.sqrt(buf.reduce((sum, v) => sum + v * v, 0) / buf.length);
+        if (rms < BARGE[modeRef.current]) { loudSince = 0; return; }
+        loudSince ||= Date.now();
+        if (Date.now() - loudSince >= BARGE_HOLD_MS) stop(); // 학생이 말을 시작했다 → 튜터 멈춤, 듣기 시작
+      }, BARGE_POLL_MS);
+    });
+    return () => {
+      alive = false;
+      clearInterval(poll);
+      void ctx?.close();
+    };
+  }, [speaking, micOn, canListen, stop]);
+
+  // ── 음성 인식: 튜터가 말하는 동안은 끈다 (반이중) ──
+  const running = canListen && micOn && !hold && !thinking && !speaking;
 
   useEffect(() => {
     const Ctor = recognizerCtor();
@@ -176,9 +257,8 @@ export function useVoice({ lang, thinking, hold, onFinal }: Options): Voice {
       }
       const heard = `${finals} ${partial}`.trim();
       if (!heard) return;
-      const echoWindow = speakingRef.current || Date.now() - spokeUntil.current < ECHO_TAIL_MS;
-      if (echoWindow && !pending.current && isEcho(heard, lineRef.current)) return;
-      if (speakingRef.current) stop(); // 끼어들기 — 학생이 말을 시작했다
+      const echoTail = Date.now() - spokeUntil.current < ECHO_TAIL_MS;
+      if (echoTail && !pending.current && isEcho(heard, lineRef.current)) return;
       if (finals.trim()) pending.current = `${pending.current} ${finals.trim()}`.trim();
       setInterim(`${pending.current} ${partial.trim()}`.trim());
       clearTimeout(submitTimer.current);
@@ -218,7 +298,7 @@ export function useVoice({ lang, thinking, hold, onFinal }: Options): Voice {
       rec.onend = null;
       rec.abort();
     };
-  }, [running, lang, stop]);
+  }, [running, lang]);
 
   const toggleMic = useCallback(() => {
     if (!canListen) return;
@@ -237,7 +317,7 @@ export function useVoice({ lang, thinking, hold, onFinal }: Options): Voice {
           : 'listening';
 
   return {
-    state, canListen, canSpeak, micOn, held: canListen && micOn && hold,
+    state, canListen, canSpeak: true, micOn, held: canListen && micOn && hold,
     toggleMic, interim, speak, stop, endedId, error,
   };
 }
