@@ -204,6 +204,8 @@ const TABLE: Row[] = [
     } },
 
   // M10 그만두기 · 시간 초과
+  { id: '과제 중 "그만할래"(ABORT로 와도) → 다음 과제 제안 없이 마무리', given: () => inTask3(), steps: [{ say: 'ABORT', text: '그만할래' }],
+    expect: ({ state, say }) => { assert.equal(state.stage, 'closing'); assert.ok(say?.startsWith(L.closingLead)); assert.ok(state.tasks.some((t) => t.status === 'skipped')); } },
   { id: 'M10-59 ABORT → T3 skipped, 이유 기록, 설득 없음', given: () => inTask3(), steps: [{ say: 'ABORT', text: '3문단은 그냥 됐어요.' }],
     expect: ({ state, say }) => {
       assert.equal(task(state, 't3').status, 'skipped'); assert.equal(task(state, 't3').evidence, '3문단은 그냥 됐어요.');

@@ -30,8 +30,8 @@ Labels:
 - EXAMPLE_REQ: asks for an example
 - USER_INQUIRY: the student asks you a question (including "why?")
 - CLOSER: receives your answer/explanation and closes it ("ah okay, got it", "thanks")
-- ABORT: wants to drop what we are doing ("never mind that")
-- PRE_CLOSING: wants to end the session
+- ABORT: wants to drop just the current task ("skip paragraph 3", "never mind that one")
+- PRE_CLOSING: wants to end the session ("I want to stop", "I'm done", "that's enough for today") — a bare "stop" that names nothing is PRE_CLOSING
 - UNCLEAR: cannot tell what they mean (you cannot understand the student)
 - CONFUSED: the student says they don't know / don't understand / can't think of anything in reply to your question or proposal ("I don't know", "I'm not sure", "I don't get it", "nothing comes to mind"). Asking what you meant is PARAPHRASE_REQ; asking you to write it is EXEMPLAR_REQ. A trailing-off or broken fragment you cannot make out ("uh, the, um…", "well I…") is UNCLEAR, not CONFUSED — CONFUSED only when they actually say they don't know
 - OFF_GOAL: wants to work on something other than the current task first ("can we do paragraph 3 first?", "I'd rather start with my motivation"). Just dropping the current thing is ABORT; ending the session is PRE_CLOSING

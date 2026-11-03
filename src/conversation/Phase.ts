@@ -14,6 +14,9 @@ import { RepairHandler } from './RepairHandler';
 import { Say } from './Say';
 import { Tasks } from './Tasks';
 
+// 문단·과제를 집지 않은 '그만' — 판정이 ABORT로 와도 세션 마무리로 본다
+const STOP_SESSION = /^(?!.*(\d\s*문단|과제|이건|그건|paragraph)).*(그만\s*(할래|할게|하고|하자|해요|둘래)|끝낼래|끝내고\s*싶|끝내자|여기까지|\bstop\b|\bquit\b|i'?m done)/i;
+
 export abstract class Phase {
   abstract readonly name: string; // 문서·로그용 이름
 
@@ -73,6 +76,8 @@ export abstract class Phase {
     const o = this.s.open;
     const t = activeTask(this.s) ?? (o?.effect === 'startTask' ? Tasks.find(this.s, o.taskId) : undefined);
     if (!t) return Say.code({ ...base, open: null }, L.ok, null, 'B5');
+    // "그만할래"처럼 무엇을 집지 않은 그만은 세션을 끝내자는 뜻 — 다음 과제로 넘기지 않고 마무리 (사용자 결정 2026-11-03)
+    if (STOP_SESSION.test(text)) return Agenda.startClosing(Tasks.skip(base, t.id, text, now), true, L.closingLead);
     return Say.code({ ...Tasks.skip(base, t.id, text, now), open: null }, L.abortTask, null, 'B5');
   }
 
