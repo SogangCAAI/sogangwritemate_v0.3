@@ -1,5 +1,6 @@
 // 한 턴의 LLM 부분 — Haiku 한 번으로 판정 + 응답, 그다음 결정적 검사로 다듬는다
 import { capSentences, stripTrailingQuestion } from './checks';
+import { lines } from './lines';
 import { callTool, LlmError, MODELS } from './llm';
 import { TURN_TOOL, turnSystem, turnUser } from './prompt';
 import type { Judge, SessionState } from './state';
@@ -20,7 +21,8 @@ export async function respond(s: SessionState, ctx: Context, history: Line[], te
     model: MODELS.turn, maxTokens: 700, tool: TURN_TOOL,
     system: turnSystem(s, ctx), user: turnUser(history, text, s.lang),
   });
-  return tidy(fromLlm('respond', () => parseJudge(raw)));
+  const j = fromLlm('respond', () => parseJudge(raw));
+  return tidy(j.reply ? j : { ...j, reply: lines(s.lang).ok });
 }
 
 // 길이 규칙 · 3번째 자리 규칙 — 모델 문장에만 적용한다 (코드가 말하는 줄은 이미 규칙대로)

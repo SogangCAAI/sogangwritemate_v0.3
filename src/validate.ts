@@ -45,6 +45,12 @@ function bool(x: unknown, name: string): boolean {
   return typeof x === 'boolean' ? x : fail(`${name}: 참/거짓이 아니에요.`);
 }
 
+// 모델이 목록을 넘치게 내면 실패시키지 않고 앞에서부터 쓴다 — 구조화된 출력이 maxItems를 받지 않아 개수는 여기서 맞춘다
+// 모델이 쓴 글은 상한을 넘어도 실패시키지 않고 자른다 (클라이언트 입력에는 쓰지 않는다 — 그쪽은 str로 거절)
+const clip = (x: unknown, name: string, max: number): string => str(x, name, MAX_TEXT).trim().slice(0, max);
+
+const firstN = (x: unknown, n: number): unknown => (Array.isArray(x) ? x.slice(0, n) : x);
+
 export function strList(x: unknown, name: string, maxItems: number, maxLen = MAX_TEXT): string[] {
   if (!Array.isArray(x) || x.length > maxItems) fail(`${name}: 목록이 아니거나 너무 길어요.`);
   return x.map((v, i) => str(v, `${name}[${i}]`, maxLen));
@@ -138,8 +144,8 @@ export function parseHistory(x: unknown): Line[] {
 
 export function parseJudge(x: unknown): Judge {
   const j = obj(x, 'judge');
+  // 빈 말은 형식 오류로 보지 않는다 — 맞장구·코드가 답하는 되묻기에서 모델이 비워 둘 수 있다 (respond가 '네.'로 채운다)
   const reply = str(j.reply, 'judge.reply').trim();
-  if (!reply) fail('judge.reply: 비어 있어요.');
   return {
     move: oneOf(j.move, MOVES, 'judge.move') as Move,
     reply,
@@ -153,8 +159,7 @@ export function parseJudge(x: unknown): Judge {
 
 export function parseVerdict(x: unknown): Verdict {
   const v = obj(x, 'verdict');
-  const reason = str(v.reason, 'verdict.reason', 600).trim();
-  if (!reason) fail('verdict.reason: 비어 있어요.');
+  const reason = clip(v.reason ?? '', 'verdict.reason', 600); // 비면 decide가 기본 힌트를 쓴다
   return { better: bool(v.better, 'verdict.better'), reason };
 }
 
@@ -171,31 +176,32 @@ function parseAssessment(x: unknown, paragraphCount: number): Assessment {
     const c = obj(v, `assessment.claims[${i}]`);
     return {
       paragraph: num(c.paragraph, 'claim.paragraph'),
-      claim: str(c.claim, 'claim.claim', 200).trim(),
+      claim: clip(c.claim, 'claim.claim', 200),
       evidence: oneOf(c.evidence, EVIDENCE, 'claim.evidence'),
-      note: str(c.note, 'claim.note', 300).trim(),
+      note: clip(c.note, 'claim.note', 300),
     };
   }).filter((c) => Number.isInteger(c.paragraph) && c.paragraph >= 1 && c.paragraph <= paragraphCount);
-  return { summary: str(a.summary, 'assessment.summary', 400).trim(), claims };
+  return { summary: clip(a.summary, 'assessment.summary', 400), claims };
 }
 
 // 진단은 과제 정확히 3개 + 브리핑 3파트. 내용 과제가 앞에 오도록 코드가 다시 세운다
 export function parseDiagnosis(x: unknown, paragraphCount: number): Diagnosis {
   const d = obj(x, 'diagnosis');
-  if (!Array.isArray(d.tasks) || d.tasks.length !== 3) fail('diagnosis.tasks: 과제가 정확히 3개가 아니에요.');
-  const briefing = strList(d.briefing, 'diagnosis.briefing', 3, 600);
+  const taskList = firstN(d.tasks, 3);
+  if (!Array.isArray(taskList) || taskList.length !== 3) fail('diagnosis.tasks: 과제가 3개보다 적어요.');
+  const briefing = strList(firstN(d.briefing, 3), 'diagnosis.briefing', 3).map((b) => b.trim().slice(0, 600));
   if (briefing.length !== 3) fail('diagnosis.briefing: 파트가 3개가 아니에요.');
-  const raw = d.tasks.map((v, i) => {
+  const raw = taskList.map((v, i) => {
     const t = obj(v, `diagnosis.tasks[${i}]`);
     const paragraph = num(t.paragraph, 'task.paragraph');
     if (!Number.isInteger(paragraph) || paragraph < 1 || paragraph > paragraphCount) fail('task.paragraph: 글에 없는 문단이에요.');
     return {
       kind: oneOf(t.kind, KINDS, 'task.kind'),
       paragraph,
-      keyword: str(t.keyword, 'task.keyword', 60),
-      goal: str(t.goal, 'task.goal', 120).trim(),
-      doneWhen: str(t.doneWhen, 'task.doneWhen', 300).trim(),
-      opener: str(t.opener, 'task.opener', 300).trim(),
+      keyword: clip(t.keyword, 'task.keyword', 60),
+      goal: clip(t.goal, 'task.goal', 120),
+      doneWhen: clip(t.doneWhen, 'task.doneWhen', 300),
+      opener: clip(t.opener, 'task.opener', 300),
     };
   });
   const ordered = [...raw.filter((t) => t.kind === 'content'), ...raw.filter((t) => t.kind === 'form')];
@@ -211,5 +217,5 @@ export interface Summary { report: string; nextSteps: string[] }
 
 export function parseSummary(x: unknown): Summary {
   const s = obj(x, 'summary');
-  return { report: str(s.report, 'summary.report', 3000), nextSteps: strList(s.nextSteps, 'summary.nextSteps', 3, 400) };
+  return { report: clip(s.report, 'summary.report', 3000), nextSteps: strList(firstN(s.nextSteps, 3), 'summary.nextSteps', 3).map((n) => n.trim().slice(0, 400)) };
 }

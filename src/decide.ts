@@ -161,10 +161,11 @@ function onEdit(s: SessionState, ev: Extract<TurnEvent, { kind: 'edit' }>): Outc
     return codeSays({ ...s1, open: null }, L.exemplarDone, null, 'done:exemplar');
   }
   if (!ev.verdict) return out(updateTask(s, t.id, { edits }), null, 'none');
-  const { better, reason } = ev.verdict;
+  const { better } = ev.verdict;
+  const reason = ev.verdict.reason || (better ? '' : L.tryAgain);
   if (better) {
     const s1 = updateTask(s, t.id, { edits, status: 'done', endedAt: ev.now, evidence: reason });
-    return codeSays({ ...s1, open: null }, `${L.better} ${reason}`, null, 'done:eval');
+    return codeSays({ ...s1, open: null }, `${L.better} ${reason}`.trim(), null, 'done:eval');
   }
   // A4.1: 아직 부족 — reason이 곧 힌트 하나
   return codeSays(updateTask(s, t.id, { edits }), reason, { pattern: 'P1', firstPair: reason }, 'A4.1');
