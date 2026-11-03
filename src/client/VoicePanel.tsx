@@ -2,9 +2,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { Move } from '../state';
 import { MicDesk } from './MicDesk';
+import type { Line } from './types';
 import type { Voice } from './voice';
-
-export interface Line { who: 'tutor' | 'student'; text: string }
 
 export const CHIPS: { label: string; move: Move }[] = [
   { label: '뭐라고요?', move: 'REPEAT_REQ' },
@@ -14,7 +13,7 @@ export const CHIPS: { label: string; move: Move }[] = [
 ];
 
 interface Props {
-  log: Line[];
+  log: readonly Line[];
   voice: Voice;
   busy: boolean;
   ended: boolean;
@@ -25,7 +24,7 @@ interface Props {
   onFinish: () => void;
 }
 
-const lastIndex = (log: Line[], who: Line['who']) => log.map((l) => l.who).lastIndexOf(who);
+const lastIndex = (log: readonly Line[], who: Line['who']) => log.map((l) => l.who).lastIndexOf(who);
 
 export function VoicePanel({ log, voice, busy, ended, error, draft, onDraft, onSay, onFinish }: Props) {
   const [typing, setTyping] = useState(false);

@@ -1,9 +1,9 @@
-// 골드 케이스 29개를 실제 v3 턴 경로(src/respond.ts의 프롬프트·도구·검사)로 돌리고,
+// 골드 케이스 29개를 실제 v3 턴 경로(TurnResponder의 프롬프트·도구·검사)로 돌리고,
 // 라벨이 아니라 next()의 결과(상태 이동)로 채점한다 — 라벨이 달라도 결과가 같으면 맞음.
 // 실행: npm run gold -- [<.env 경로>=../pre-dashboard_code/.env]   (API 호출 29회)
 import { CASES } from './cases.mjs';
 import { next } from '../src/decide.ts';
-import { respond } from '../src/respond.ts';
+import { services } from '../src/server/deps.ts';
 import { emptyJudge } from '../src/state.ts';
 import { ESSAY, POSTING, T0, fresh } from '../tests/fixture.ts';
 
@@ -75,7 +75,7 @@ async function runCase([id, , tutor, student, expected, pauseMs]) {
   const state = SETUP[id](tutor);
   const text = pauseMs ? `(${(pauseMs / 1000).toFixed(1)}초 쉬고) ${student}` : student;
   const t0 = performance.now();
-  const j = await respond(state, CTX, [{ who: 'tutor', text: tutor }], text);
+  const j = await services.responder.respond(state, CTX, [{ who: 'tutor', text: tutor }], text);
   const ms = performance.now() - t0;
   const same = outcome(state, j.move, student, j.positive) === outcome(state, expected, student, j.positive);
   return { id, expected, got: j.move, same, ms, reply: j.reply };

@@ -35,18 +35,19 @@ Netlify: 진단(Sonnet)이 10초를 넘을 수 있어 함수 시간 제한을 26
 | 파일 | 하는 일 |
 |---|---|
 | `src/state.ts` | SessionState · Task · Judge · 이벤트 타입, 시간 예산 상수 |
-| `src/decide.ts` | `next()` — 13 라벨 · B4.4 · UNCLEAR 1/2/3 · 과제 전환 · 시간 제안 · 마무리. 순수 함수 |
+| `src/conversation/` | 대화 흐름 — `TutoringSession` + 국면 클래스(State 패턴): 13 라벨 · B4.4 · UNCLEAR 1/2/3 · 과제 전환 · 시간 제안 · 마무리. 지도: `FLOW.md` |
+| `src/decide.ts` | 예전 입구 `next()` — `TutoringSession`에 위임 (테스트·실험용) |
 | `src/lines.ts` | 코드가 직접 말하는 문장(ko/en) · 마무리 파트(과제 표에서만) |
 | `src/checks.ts` | 문장 상한 · 답 뒤 질문 떼기 · 인용 검사 · 시간 · 상투 표현 사전(v2 이식) |
-| `src/prompt.ts` | 프롬프트 .md 읽기 + 열린 패턴/지금 과제/다음 칸 채우기 · respond 도구 |
-| `src/respond.ts` | Haiku 한 번 + 출력 검증 + 길이 검사 |
-| `src/llm.ts` | Anthropic Messages 호출 하나(도구 강제, 시간 제한, 사용자용 오류) |
-| `src/validate.ts` | 요청 본문·클라이언트 상태·LLM 출력 손 검사 |
-| `src/db.ts` · `src/http.ts` | Supabase 저장(없으면 생략) · 응답 봉투 `{ok, data, error}` |
+| `src/server/handlers/` | 함수 본문 클래스 (Diagnose · Turn · Evaluate · Summary · Tts) |
+| `src/server/services/` | `TurnResponder`(Haiku 한 번 + 길이 검사) · `Diagnoser` · `Evaluator` · `Summarizer` · `TtsService` |
+| `src/server/llm/` | `LlmClient`(구조화된 출력, 시간 제한, 사용자용 오류) · `PromptBook` · `TurnPrompt` |
+| `src/server/parse/` | `RequestParser`(요청 본문·클라이언트 상태) · `LlmOutputParser`(모델 출력, 스키마는 `outputs/`) |
+| `src/server/store/` · `src/server/http/` | Supabase 저장(없으면 생략) · 응답 봉투 `{ok, data, error}` |
 | `src/prompts/*.md` | tutor.ko/en · diagnose · evaluate · summary |
 | `netlify/functions/` | `diagnose` (Sonnet) · `turn` (Haiku) · `evaluate` (Haiku) · `summary` (Sonnet) |
-| `src/client/` | Landing · Session(대화·칩·글 패널·과제 목록) · Summary(과제 표·처음/끝 글) |
-| `tests/` | `decide.test.ts` 목업 표 테스트 · `checks.test.ts` · `handlers.test.ts` |
+| `src/client/` | Landing · Session(대화·칩·글 패널·과제 목록) · Summary(과제 표·처음/끝 글) · `SessionController` · `voice/`(TutorSpeaker · BargeInDetector · SpeechListener) |
+| `tests/` | `decide.test.ts` 목업 표 테스트 · `conversation.test.ts` 국면 · `sessionController.test.ts` · `checks` · `handlers` · `validate` |
 | `experiments/gold_eval.mjs` | 골드 29개를 v3 턴 경로로, 라벨이 아니라 `next()` 결과로 채점 |
 
 ## 다음 단계

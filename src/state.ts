@@ -5,8 +5,8 @@ export type Lang = 'ko' | 'en';
 
 // 첫 진단의 평가 — 학생에게 보여 주는 것. 턴마다 오가는 상태에는 넣지 않는다 (화면만 들고 있다)
 export type Evidence = 'strong' | 'weak' | 'none';
-export interface ClaimCheck { paragraph: number; claim: string; evidence: Evidence; note: string }
-export interface Assessment { summary: string; claims: ClaimCheck[] }
+export interface ClaimCheck { readonly paragraph: number; readonly claim: string; readonly evidence: Evidence; readonly note: string }
+export interface Assessment { readonly summary: string; readonly claims: readonly ClaimCheck[] }
 
 // 'ended'는 문서에 없다 — 성공 확인(C4.6)이 끝났다는 표시가 따로 필요해서 더했다
 export type Stage = 'opening' | 'briefing' | 'content' | 'form' | 'closing' | 'ended';
@@ -29,72 +29,72 @@ export type Pattern = (typeof PATTERNS)[number];
 export type Effect = 'startTask' | 'moveOn' | 'close';
 
 export interface Open {
-  pattern: Pattern;
-  firstPair: string;
-  parts?: string[]; // A3 전용: 브리핑·마무리 파트
-  part?: number;
-  effect?: Effect;
-  taskId?: string;
+  readonly pattern: Pattern;
+  readonly firstPair: string;
+  readonly parts?: readonly string[]; // A3 전용: 브리핑·마무리 파트
+  readonly part?: number;
+  readonly effect?: Effect;
+  readonly taskId?: string;
 }
 
 export type TaskStatus = 'pending' | 'active' | 'done' | 'skipped' | 'timeout';
 export type TaskKind = 'content' | 'form';
 
 export interface Task {
-  id: string;
-  order: 1 | 2 | 3;
-  kind: TaskKind;
-  target: { keyword?: string; paragraph: number }; // paragraph는 1부터
-  goal: string; // 학생에게 보여 줄 짧은 명사구 ("2문단에 협업 경험 넣기")
-  doneWhen: string;
-  opener: string; // 과제를 여는 첫 질문 — 진단이 만들고, 학생이 과제를 수락하면 코드가 그대로 말한다
-  status: TaskStatus;
-  evidence?: string;
-  fromExemplar: boolean;
-  startedAt?: number;
-  endedAt?: number;
-  turns: number;
-  edits: number;
-  experience: string[]; // 학생 답 원문 (A5.1/A5.5)
-  exemplar?: string; // 튜터가 준 시범 문장 — 그대로 들어가면 재평가 없이 done
-  nudged: boolean; // 시간 초과 제안을 이미 했나
+  readonly id: string;
+  readonly order: 1 | 2 | 3;
+  readonly kind: TaskKind;
+  readonly target: { readonly keyword?: string; readonly paragraph: number }; // paragraph는 1부터
+  readonly goal: string; // 학생에게 보여 줄 짧은 명사구 ("2문단에 협업 경험 넣기")
+  readonly doneWhen: string;
+  readonly opener: string; // 과제를 여는 첫 질문 — 진단이 만들고, 학생이 과제를 수락하면 코드가 그대로 말한다
+  readonly status: TaskStatus;
+  readonly evidence?: string;
+  readonly fromExemplar: boolean;
+  readonly startedAt?: number;
+  readonly endedAt?: number;
+  readonly turns: number;
+  readonly edits: number;
+  readonly experience: readonly string[]; // 학생 답 원문 (A5.1/A5.5)
+  readonly exemplar?: string; // 튜터가 준 시범 문장 — 그대로 들어가면 재평가 없이 done
+  readonly nudged: boolean; // 시간 초과 제안을 이미 했나
 }
 
 export interface Last {
-  played: string;
-  paraphrase: string;
-  example: string;
+  readonly played: string;
+  readonly paraphrase: string;
+  readonly example: string;
 }
 
 export interface SessionState {
-  id: string;
-  lang: Lang;
-  stage: Stage;
-  open: Open | null;
-  topic: { keyword?: string; paragraph?: number };
-  last: Last;
-  repaired: boolean; // 수리·학생 질문 직후 — 이때의 CLOSER는 그 곁가지만 닫는다 (B4.4)
-  unclearStreak: number;
-  tasks: Task[];
-  startedAt: number;
-  helped: boolean | null;
-  closeOffered: boolean; // 세션 마감 제안을 이미 했나
+  readonly id: string;
+  readonly lang: Lang;
+  readonly stage: Stage;
+  readonly open: Open | null;
+  readonly topic: { readonly keyword?: string; readonly paragraph?: number };
+  readonly last: Last;
+  readonly repaired: boolean; // 수리·학생 질문 직후 — 이때의 CLOSER는 그 곁가지만 닫는다 (B4.4)
+  readonly unclearStreak: number;
+  readonly tasks: readonly Task[];
+  readonly startedAt: number;
+  readonly helped: boolean | null;
+  readonly closeOffered: boolean; // 세션 마감 제안을 이미 했나
 }
 
 // Haiku 한 번이 내는 것: 판정 + 튜터의 다음 말 + 수리용 콘텐츠
 export interface Judge {
-  move: Move;
-  reply: string;
-  paraphrase: string;
-  example: string;
-  opens: Pattern | 'none';
-  exemplar: string;
-  positive: boolean; // 성공 확인(C4.6)에 대한 답이 긍정인가
+  readonly move: Move;
+  readonly reply: string;
+  readonly paraphrase: string;
+  readonly example: string;
+  readonly opens: Pattern | 'none';
+  readonly exemplar: string;
+  readonly positive: boolean; // 성공 확인(C4.6)에 대한 답이 긍정인가
 }
 
 export interface Verdict {
-  better: boolean;
-  reason: string;
+  readonly better: boolean;
+  readonly reason: string;
 }
 
 export type TurnEvent =
@@ -104,9 +104,9 @@ export type TurnEvent =
   | { kind: 'edit'; paragraph: number; after: string; verdict: Verdict | null; now: number };
 
 export interface Outcome {
-  state: SessionState;
-  say: string | null;
-  agentAction: string; // turns.agent_action 기록용
+  readonly state: SessionState;
+  readonly say: string | null;
+  readonly agentAction: string; // turns.agent_action 기록용
 }
 
 export const SESSION_MS = 20 * 60_000;

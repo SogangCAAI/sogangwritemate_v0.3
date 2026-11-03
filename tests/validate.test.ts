@@ -1,7 +1,7 @@
 // 진단 출력 검사 — 평가(assessment)는 학생이 그대로 읽으므로 글에 없는 문단·모르는 등급을 막는다
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseDiagnosis, parseJudge, parseSummary, parseVerdict, ValidationError } from '../src/validate';
+import { parseDiagnosis, parseJudge, parseSummary, parseVerdict, ValidationError } from '../src/server/parse/LlmOutputParser';
 
 const task = (paragraph: number) => ({ kind: 'content', paragraph, keyword: 'k', goal: 'g', doneWhen: 'd', opener: 'o?' });
 const raw = (claims: unknown[]) => ({

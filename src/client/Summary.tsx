@@ -2,13 +2,13 @@
 import { useEffect, useState } from 'react';
 import { mmss, taskTimeMs } from '../checks';
 import type { SessionState } from '../state';
-import { errorText, post, type SummaryResult } from './api';
-import type { Start } from './Landing';
+import { api, errorText, type SummaryResult } from './ApiClient';
+import type { Start } from './types';
 import { Masthead } from './Masthead';
 import { Stamp } from './Stamp';
 import { DiagnosisNote } from './DiagnosisNote';
 
-interface Props { start: Start; state: SessionState; final: string[]; onRestart: () => void }
+interface Props { start: Start; state: SessionState; final: readonly string[]; onRestart: () => void }
 
 const folio = (n: number) => String(n).padStart(2, '0');
 
@@ -19,7 +19,7 @@ export function Summary({ start, state, final, onRestart }: Props) {
 
   useEffect(() => {
     let live = true;
-    post<SummaryResult>('/api/summary', { state, original: start.paragraphs, final, posting: start.posting })
+    api.summary({ state, original: start.paragraphs, final, posting: start.posting })
       .then((r) => live && setSummary(r))
       .catch((e) => live && setError(errorText(e)));
     return () => { live = false; };

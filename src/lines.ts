@@ -54,7 +54,7 @@ export function lines(lang: Lang): typeof KO {
 }
 
 // 마무리 A3 파트 — 과제 표에서만 만든다 (지어낸 성과가 없도록)
-export function closingParts(lang: Lang, tasks: Task[]): string[] {
+export function closingParts(lang: Lang, tasks: readonly Task[]): string[] {
   const L = lines(lang);
   const parts = tasks.map((t, i) => {
     const said = t.status === 'done' ? L.status.done : t.status === 'skipped' ? L.status.skipped : L.status.rest;

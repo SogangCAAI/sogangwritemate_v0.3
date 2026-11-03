@@ -1,6 +1,6 @@
 # 서강 글벗 v3 — 아키텍처
 
-갱신 2026-11-03 · 대상 커밋: `main` · 설계 근거: `제안 - v3 새로 짜기 (ponytail).md` · `제안 - NCF 패턴으로 대화 설계.md` · `대본 목업 - NCF 패턴 1차.md`
+갱신 2026-11-03 · 대상 커밋: `main` · 대화 흐름 지도: `FLOW.md` · 설계 근거: `제안 - v3 새로 짜기 (ponytail).md` · `제안 - NCF 패턴으로 대화 설계.md` · `대본 목업 - NCF 패턴 1차.md`
 
 ---
 
@@ -11,19 +11,19 @@
 
 설계 원칙 세 가지:
 
-1. **판단은 모델이 한 번에, 결정은 코드 한 곳에서.** 한 턴에 LLM은 1회(Haiku)만 부르고, 그 판정으로 상태를 옮기는 일은 순수 함수 `next()` 하나가 한다.
+1. **판단은 모델이 한 번에, 결정은 코드 한 곳에서.** 한 턴에 LLM은 1회(Haiku)만 부르고, 그 판정으로 상태를 옮기는 일은 `src/conversation/`의 `TutoringSession`(국면 클래스, State 패턴)이 한다. 받은 상태를 바꾸지 않고 새 상태를 돌려준다.
 2. **대화는 NCF 패턴.** 상태를 옮기는 것은 기본 짝의 둘째 짝(학생의 답)뿐이고, 되묻기·확인·인정은 상태를 바꾸지 않는다 (Moore & Arar 2019).
 3. **완료는 글이 실제로 나아졌을 때.** 학생이 대상 문단을 고치고, 재평가가 "원래보다 낫다"고 하면(또는 시범 문장을 받아들이면) 과제가 끝난다.
 
 ```
 ┌──────────────────────── 브라우저 (React + Vite) ────────────────────────┐
 │ Landing ─▶ Session ─────────────────────────────────▶ Summary           │
-│            │  voice.ts (음성 인식·합성)                                   │
+│            │  SessionController · voice/ (음성 인식·합성)                 │
 │            │  상태(SessionState)를 들고 매 턴 서버에 보낸다                 │
 └────────────┼────────────────────────────────────────────────────────────┘
              │ POST /api/diagnose · /api/turn · /api/evaluate · /api/summary
 ┌────────────▼──────────── Netlify Functions (상태 없음) ─────────────────┐
-│ validate → (LLM 1회) → next() → checks → db 저장 → {ok, data, error}   │
+│ Handler: RequestParser → (LLM 1회) → TutoringSession → db → {ok,…}    │
 └────────────┬───────────────────────────────┬────────────────────────────┘
              │ Anthropic Messages API         │ Supabase (선택)
              ▼                                ▼
@@ -49,27 +49,27 @@
 ```mermaid
 sequenceDiagram
   participant S as 학생 (브라우저)
-  participant T as turn.ts
-  participant H as Haiku 5.5
-  participant D as decide.next()
+  participant T as TurnHandler
+  participant H as Haiku 5.5 (TurnResponder)
+  participant D as TutoringSession
   participant DB as Supabase
   S->>T: {state, context, history, event}
-  T->>T: validate (state·context 다시 세움)
+  T->>T: RequestParser (state·context 다시 세움)
   alt 힌트 칩 (뭐라고요? 등)
     T->>D: 칩 라벨로 판정 (LLM 없음)
   else 말·글자
     T->>H: 시스템 프롬프트(지금 패턴·과제·다음 칸) + 최근 대화
     H-->>T: {move, reply, paraphrase, example, opens, exemplar, positive}
-    T->>T: tidy (2문장 상한 · 학생 질문에 답한 턴의 끝 질문 떼기)
+    T->>T: TurnResponder.tidy (2문장 상한 · 학생 질문에 답한 턴의 끝 질문 떼기)
   end
-  T->>D: next(state, judge, event)
+  T->>D: from(state).handle(judge, event) → 국면.onX
   D-->>T: {state', say, agentAction}
   T->>T: 인용 검사 (글·공고에 없는 인용은 경고 기록)
   T->>DB: turns 행 저장 (없으면 건너뜀)
   T-->>S: {state', say, awaitPause}
 ```
 
-- **서버는 상태를 들고 있지 않다.** 클라이언트가 매 턴 `SessionState`를 보내고, 서버는 `parseState`로 모양을 다시 세운 뒤에만 쓴다 (모르는 필드는 버림).
+- **서버는 상태를 들고 있지 않다.** 클라이언트가 매 턴 `SessionState`를 보내고, 서버는 `RequestParser.state`로 모양을 다시 세운 뒤에만 쓴다 (모르는 필드는 버림).
 - **모델이 만든 말 vs 코드가 만든 말.** 브리핑·과제 시작 질문·시간 제안·마무리·수리 응답(반복/바꿔 말하기/예시)은 코드가 말한다 (`lines.ts`, `state.last`). 모델은 그 밖의 대화 문장만 만든다.
 
 ## 4. 상태 모델 (`src/state.ts`)
@@ -94,7 +94,7 @@ SessionState
 
 ## 5. 판정 라벨 (Haiku가 고른다, NCF 1차 13개)
 
-| 라벨 | 뜻 | `next()`가 하는 일 |
+| 라벨 | 뜻 | 대화 흐름이 하는 일 (국면별 자세히: `FLOW.md`) |
 |---|---|---|
 | ANSWER · CONTINUER | 답 · 맞장구 | 열린 패턴의 다음 칸 · 브리핑 다음 파트 / 경험 이어 붙임 |
 | ACCEPT · REJECT | 제안·결론 수락 · 거절·정정 | 과제 시작/결론 확인 · 다른 후보로 (재설득 없음) |
@@ -118,7 +118,7 @@ SessionState
                               └ !better → active 유지, 튜터가 reason으로 힌트 한 문장
 ```
 
-## 7. LLM 호출 (`src/llm.ts`)
+## 7. LLM 호출 (`src/server/llm/LlmClient.ts`)
 
 | 호출 | 모델 | 생각 깊이(effort) | 시간 제한 | 출력 |
 |---|---|---|---|---|
@@ -128,23 +128,32 @@ SessionState
 | 요약 | `claude-sonnet-5-5` | medium | 22초 | {report, nextSteps} |
 | 튜터 목소리 | Google TTS `Chirp3-HD` (ko Autonoe · en Aoede) | — | 8초 | MP3 (`/api/tts`) |
 
-- 모두 **구조화된 출력**(`output_config.format` json_schema)으로 받는다. Sonnet 5.5는 강제 `tool_choice`를 받지 않기 때문이다. 스키마는 보내기 전에 `additionalProperties:false`로 닫고 지원 안 되는 `minItems/maxItems`를 뺀다 — 개수 검사는 `validate.ts`가 응답 뒤에 한다.
+- 모두 **구조화된 출력**(`output_config.format` json_schema)으로 받는다. Sonnet 5.5는 강제 `tool_choice`를 받지 않기 때문이다. 스키마는 보내기 전에 `additionalProperties:false`로 닫고 지원 안 되는 `minItems/maxItems`를 뺀다 — 개수는 출력 파서(`src/server/parse/outputs/`)가 응답 뒤에 맞춘다.
 - 5.5 모델은 생각 토큰도 `max_tokens`에 들어가므로 출력 상한에 여유(6000)를 더한다. `temperature`는 보내지 않는다.
 - 공고가 비어 있으면 프롬프트에 "공고 없음"을 명시해 모델이 공고 요구를 지어내지 않게 한다 (`postingText`).
-- 모델 출력은 신뢰 경계다: 형식이 틀리면 사용자에게 "다시 보내 주세요"로 보이고, 서버 로그에 원인이 남는다.
+- 모델 출력은 신뢰 경계다: 형식이 틀리면 사용자에게 "다시 보내 주세요 (이름 · 칸)"로 보이고, 서버 로그에 원인과 출력 앞부분이 남는다 (`LlmOutputParser`).
 
 ## 8. 화면 (`src/client/`)
+
+화면 컴포넌트는 함수 컴포넌트로 그리기만 하고, 진행·음성은 클래스가 한다.
 
 | 파일 | 역할 |
 |---|---|
 | `App.tsx` | 화면 셋을 상태 하나로 고른다 (라우터 없음) |
 | `Landing.tsx` | 글·공고(선택)·이력(선택)·언어 입력, 문단 나눔 미리보기 → 진단 |
-| `Session.tsx` | 세션 화면 조립, 턴·재평가 호출, 쉼 이벤트 |
+| `Session.tsx` | 세션 화면 조립 (그리기만) |
+| `session/SessionController.ts` | 클래스 — 턴·재평가 호출, 대화 기록, 튜터 말 읽기, 쉼을 보낼 때 고르기 (`useSyncExternalStore`로 구독) |
+| `session/useSession.ts` | 컨트롤러 · 음성 · 시계 · Space 키를 화면에 잇는 훅 |
+| `ApiClient.ts` | 클래스 — `/api/*` 호출, 봉투 풀기, 사용자용 오류 문장 |
+| `types.ts` | `Start` · `Line` · `StudentEvent` |
+| `voice/TutorSpeaker.ts` | 클래스 — 튜터 말: `/api/tts`(Google TTS)를 `<audio>`로, 없으면 speechSynthesis. 줄 번호 · 안전 시간 |
+| `voice/BargeInDetector.ts` | 클래스 — 튜터가 말하는 동안 메아리 제거 마이크 소리 크기로 끼어들기 감지 |
+| `voice/SpeechListener.ts` | 클래스 — 브라우저 SpeechRecognition (켤 때마다 하나), 1.2초 침묵이면 한 턴, 끝난 직후 메아리 글자 겹침 거르기 |
+| `voice/useVoice.ts` · `voice/types.ts` | 세 부품을 잇는 훅 — `Voice` 모양 (반이중: 튜터가 말하는 동안 인식 끔) |
 | `Masthead.tsx` · `TaskStrip.tsx` · `Stamp.tsx` | 제호 띠(CAAI 표기·남은 시간) · 과제 3꼭지 · 도장 |
 | `EssayPanel.tsx` · `AutoTextarea.tsx` | 글 전체를 문서로, 지금 문단은 늘 편집 가능, 다른 문단은 눌러서 고침 |
 | `DiagnosisNote.tsx` | 첫 진단 평가 (편집 메모) — 세션에선 브리핑 동안 펼침·과제 시작 후 접힘, 요약에서 다시 |
 | `VoicePanel.tsx` · `MicDesk.tsx` | 튜터의 지금 말(큰 자막) · 학생 실시간 자막 · 마이크 상태 · 말하기 힌트 · 글자 입력 보조 |
-| `voice.ts` | 음성 훅 — 학생: 브라우저 SpeechRecognition / 튜터: `/api/tts`(Google TTS)를 `<audio>`로 재생, 없으면 speechSynthesis. 메아리 제거 세 겹(반이중 인식 · 메아리 제거 마이크로 끼어들기 감지 · 끝난 직후 글자 겹침 거르기) |
 | `Summary.tsx` | 과제 표 · 튜터의 정리 · 처음 진단 · 처음 글/끝 글 |
 | `styles.css` | 디자인 토큰(라이트/다크) — 규칙은 `DESIGN.md` |
 
@@ -161,23 +170,31 @@ SessionState
 
 ```
 sogang-tutor-v3/
-├─ netlify/functions/   diagnose · turn · evaluate · summary (입구, 각 50~80줄)
+├─ netlify/functions/   diagnose · turn · evaluate · summary · tts (입구, 각 8줄: 핸들러 만들고 handle(req))
 ├─ src/
-│  ├─ state.ts          타입 · 상수 (20분 · 과제 5분 · 마감 경고 3분)
-│  ├─ decide.ts         next() — 결정의 유일한 자리 (순수 함수)
-│  ├─ respond.ts        턴 LLM 호출 + 결정적 다듬기
-│  ├─ llm.ts            Anthropic 호출 하나 (구조화된 출력)
-│  ├─ prompt.ts         프롬프트 .md 읽기 · 채우기 · 턴 스키마
-│  ├─ prompts/          tutor.ko/en · diagnose · evaluate · summary (.md)
+│  ├─ state.ts          타입(readonly) · 상수 (20분 · 과제 5분 · 마감 경고 3분) — 클라이언트·서버 공용
 │  ├─ lines.ts          코드가 말하는 문장 (ko/en)
 │  ├─ checks.ts         문장 수 · 끝 질문 떼기 · 인용 검사 · 시간 · 상투 표현 사전
-│  ├─ validate.ts       신뢰 경계 검사 (요청 본문 · 클라이언트 상태 · LLM 출력)
-│  ├─ db.ts · http.ts   Supabase 저장 · 응답 봉투 {ok, data, error}
+│  ├─ decide.ts         예전 입구 next() · wantsPause · editNeedsEval · newSession → TutoringSession
+│  ├─ conversation/     대화 흐름 (State 패턴, 지도: FLOW.md)
+│  │  ├─ TutoringSession.ts   입구 · 국면과 상관없는 수 · 국면 표
+│  │  ├─ Phase.ts · PhaseFactory.ts   바탕 클래스(템플릿 메서드) · 상태 필드 → 국면
+│  │  ├─ phases/        Briefing · TaskProposal · Experience · Conclusion · Editing · Idle · Closing · Ended
+│  │  └─ RepairHandler.ts · Agenda.ts · Say.ts · Tasks.ts
+│  ├─ server/           서버 전용
+│  │  ├─ handlers/      DiagnoseHandler · TurnHandler · EvaluateHandler · SummaryHandler · TtsHandler
+│  │  ├─ http/Handler.ts      바탕 클래스: 오류 → 봉투 {ok, data, error}
+│  │  ├─ services/      TurnResponder(턴 + tidy) · Diagnoser · Evaluator · Summarizer · TtsService
+│  │  ├─ llm/           LlmClient(구조화된 출력) · PromptBook(.md 읽기·채우기) · TurnPrompt
+│  │  ├─ parse/         RequestParser(요청·상태) · LlmOutputParser + outputs/(스키마 + 파서) · fields(작은 검사, ValidationError)
+│  │  ├─ store/SessionStore.ts   Supabase 저장 (없으면 건너뜀)
+│  │  └─ deps.ts        부품 한 벌 조립
+│  ├─ prompts/          tutor.ko/en · diagnose · evaluate · summary (.md)
 │  └─ client/           화면 (8절)
-├─ tests/               decide 표 테스트(대본 목업) · checks · handlers · validate (node:test)
+├─ tests/               decide 표 테스트(대본 목업) · conversation(국면) · sessionController · checks · handlers · validate (node:test)
 ├─ experiments/         판정 정확도 · 판정+응답 · 골드 29발화 · 실제 API 연기 시험
 ├─ supabase/schema.sql
-├─ PRODUCT.md · DESIGN.md · ARCHITECTURE.md
+├─ PRODUCT.md · DESIGN.md · ARCHITECTURE.md · FLOW.md
 └─ 제안·대본 목업 문서 3개
 ```
 
@@ -185,7 +202,7 @@ sogang-tutor-v3/
 
 ```bash
 npx tsc --noEmit                           # 타입
-npm test                                   # 유닛 55개 (오프라인, LLM 0회)
+npm test                                   # 유닛 79개 (오프라인, LLM 0회)
 npm run build                              # 프로덕션 빌드
 npm run gold                               # 골드 29발화 실제 API (다음 행동 일치율)
 npx tsx experiments/live_smoke.ts <.env>   # 네 함수를 실제 API로 한 번씩
@@ -194,7 +211,7 @@ npx netlify-cli dev                        # 로컬 http://localhost:8888
 
 ## 12. 알려진 한계 · 다음 단계
 
-- **음성은 브라우저 내장 엔진.** Chrome 음성 인식은 구글 서버를 거친다. 연구실 lab-server로 바꿀 때 `src/client/voice.ts`만 교체한다.
+- **음성은 브라우저 내장 엔진.** Chrome 음성 인식은 구글 서버를 거친다. 연구실 lab-server로 바꿀 때 `src/client/voice/`만 교체한다.
 - 메아리: 튜터가 말하는 동안은 인식을 끄고(반이중), 끼어들기는 Chrome 메아리 제거가 걸린 마이크 소리 크기로 잡는다. 끼어든 첫 음절 일부는 인식이 다시 켜지기 전이라 놓칠 수 있다. 서버 TTS가 없으면(브라우저 음성) 메아리 제거가 약해 끼어들기 문턱을 높인다.
 - 판정 정확도는 지어낸 대본 기준이다. 사람 튜터 코퍼스의 실제 학생 발화로는 아직 재지 않았다.
 - 재평가는 한 번 호출이라 같은 입력에도 판정이 흔들릴 수 있다 — 흔들리면 순서를 바꿔 두 번 묻는 방식으로 되돌린다.

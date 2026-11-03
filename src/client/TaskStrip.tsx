@@ -2,7 +2,7 @@
 import type { Task } from '../state';
 import { Stamp } from './Stamp';
 
-export function TaskStrip({ tasks }: { tasks: Task[] }) {
+export function TaskStrip({ tasks }: { tasks: readonly Task[] }) {
   return (
     <nav className="strip" aria-label="오늘의 과제">
       <ol>

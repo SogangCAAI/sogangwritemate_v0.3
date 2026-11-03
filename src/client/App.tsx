@@ -1,14 +1,15 @@
 // 화면 셋: 시작 → 세션 → 요약. 라우터 없이 상태 하나로 고른다
 import { useState } from 'react';
 import type { SessionState } from '../state';
-import { Landing, type Start } from './Landing';
+import { Landing } from './Landing';
 import { Session } from './Session';
 import { Summary } from './Summary';
+import type { Start } from './types';
 
 type Page =
   | { name: 'landing' }
   | { name: 'session'; start: Start }
-  | { name: 'summary'; start: Start; state: SessionState; final: string[] };
+  | { name: 'summary'; start: Start; state: SessionState; final: readonly string[] };
 
 export function App() {
   const [page, setPage] = useState<Page>({ name: 'landing' });

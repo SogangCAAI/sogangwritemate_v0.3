@@ -6,7 +6,7 @@ import { DiagnosisNote } from './DiagnosisNote';
 import { AutoTextarea } from './AutoTextarea';
 
 interface Props {
-  paragraphs: string[];
+  paragraphs: readonly string[];
   task?: Task; // 지금 과제
   busy: boolean;
   listenPaused: boolean; // 편집 때문에 듣기를 멈춘 상태 — 안내를 보인다
@@ -16,10 +16,10 @@ interface Props {
 }
 
 const folio = (n: number) => String(n).padStart(2, '0');
-const charCount = (ps: string[]) => ps.reduce((sum, p) => sum + p.replace(/\s/g, '').length, 0);
+const charCount = (ps: readonly string[]) => ps.reduce((sum, p) => sum + p.replace(/\s/g, '').length, 0);
 
 export function EssayPanel({ paragraphs, task, busy, listenPaused, onSave, onEditing, assessment }: Props) {
-  const [drafts, setDrafts] = useState<string[]>(paragraphs);
+  const [drafts, setDrafts] = useState<readonly string[]>(paragraphs);
   const [open, setOpen] = useState<number | null>(null); // 과제 밖에서 고치는 문단 (1부터)
   const target = task?.target.paragraph;
 
