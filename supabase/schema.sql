@@ -9,6 +9,7 @@ create table if not exists sessions (
   final_essay  jsonb,                     -- 끝 글
   tasks        jsonb not null,            -- 과제 3개 (상태·시간·턴·수정 횟수·근거)
   summary      jsonb,                     -- {report, nextSteps}
+  rubric       jsonb,                     -- 첫 진단 {rubric: 5축 {grade, evidence}, strengths} (부록 B 루브릭)
   helped       boolean,                   -- 마무리 성공 확인 (C4.6)
   created_at   timestamptz not null default now(),
   ended_at     timestamptz
@@ -33,3 +34,5 @@ create index if not exists turns_session_idx on turns (session_id, created_at);
 
 alter table sessions enable row level security;
 alter table turns enable row level security;
+
+-- 이미 만든 DB에 더할 때: supabase/migrations/20261103010000_rubric.sql

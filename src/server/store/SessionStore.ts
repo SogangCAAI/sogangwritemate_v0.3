@@ -6,6 +6,7 @@ import type { Move } from '../../state';
 export interface SessionRow {
   id: string; lang: string; posting: string; essay: readonly string[]; tasks: unknown;
   final_essay?: readonly string[]; summary?: unknown; helped?: boolean | null; ended_at?: string;
+  rubric?: unknown; // 첫 진단 {rubric, strengths} — 세션 시작 때만 쓴다
 }
 
 export type TurnRow = {

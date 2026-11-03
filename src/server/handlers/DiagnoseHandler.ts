@@ -1,4 +1,4 @@
-// /api/diagnose — 세션 입구. Sonnet이 과제 3개와 브리핑 3파트를 고르고, 코드가 첫 상태를 만든다
+// /api/diagnose — 세션 입구. Sonnet이 루브릭 5축을 판정하고 과제 3개와 브리핑 3파트를 고르고, 코드가 첫 상태를 만든다
 import { randomUUID } from 'node:crypto';
 import { TutoringSession } from '../../conversation/TutoringSession';
 import { Handler, ok } from '../http/Handler';
@@ -22,7 +22,9 @@ export class DiagnoseHandler extends Handler {
     const session = TutoringSession.start({ id: randomUUID(), lang, tasks: d.tasks, briefing: d.briefing, now: Date.now() });
     const state = session.toState();
 
-    await this.store.saveSession({ id: state.id, lang, posting: ctx.posting, essay: ctx.paragraphs, tasks: state.tasks });
-    return ok({ state, say: state.last.played, awaitPause: session.wantsPause, assessment: d.assessment });
+    await this.store.saveSession({
+      id: state.id, lang, posting: ctx.posting, essay: ctx.paragraphs, tasks: state.tasks, rubric: { rubric: d.rubric, strengths: d.strengths },
+    });
+    return ok({ state, say: state.last.played, awaitPause: session.wantsPause, rubric: d.rubric, strengths: d.strengths });
   }
 }

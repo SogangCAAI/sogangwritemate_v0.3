@@ -4,11 +4,12 @@ import assert from 'node:assert/strict';
 import type { ApiClient, TurnResult } from '../src/client/ApiClient';
 import { SessionController } from '../src/client/session/SessionController';
 import type { Start } from '../src/client/types';
+import { parseRubric } from '../src/server/parse/LlmOutputParser';
 import { ESSAY, fresh, POSTING } from './fixture';
 
 const start = (): Start => ({
   state: fresh(), say: fresh().last.played, awaitPause: true, posting: POSTING, paragraphs: ESSAY,
-  assessment: { summary: '', claims: [] },
+  rubric: parseRubric({}), strengths: '',
 });
 
 function fakeApi(reply: TurnResult, seen: unknown[]): ApiClient {

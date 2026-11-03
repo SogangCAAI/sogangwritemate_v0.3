@@ -329,18 +329,29 @@ textarea:focus-visible, input:not([type='radio']):focus-visible { outline: none;
 .diag-kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; }
 .diag-toggle::after { content: '접기'; font-size: 12px; color: var(--grey); text-decoration: underline; text-underline-offset: 3px; }
 .diag:not([open]) .diag-toggle::after { content: '펼치기'; }
-.diag-summary { font-family: var(--serif); font-size: 16px; line-height: 1.8; color: var(--ink-2); padding-bottom: var(--s3); text-wrap: pretty; }
-.diag-claims { list-style: none; padding: 0; margin: 0 0 var(--s3); display: grid; gap: 0; border-top: 1px solid var(--rule); }
-.diag-claim { display: grid; grid-template-columns: 56px minmax(0, 1fr); padding: var(--s3) 0; border-bottom: 1px solid var(--rule); }
-.diag-claim:last-child { border-bottom: 0; }
-.diag-claim .folio { padding-top: 2px; }
-.diag-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2) var(--s3); font-size: 15px; }
-.diag-line b { font-weight: 600; }
-.ev { font-size: 12px; font-weight: 600; padding: 1px var(--s2); border: 1px solid currentColor; border-radius: 2px; white-space: nowrap; }
-.ev-strong .ev { color: var(--ink); }
-.ev-weak .ev { color: var(--ink-2); border-style: dashed; }
-.ev-none .ev { color: var(--paper); background: var(--ink); border-color: var(--ink); }
-.diag-note { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+.diag-intro { font-size: 13px; color: var(--ink-2); padding-bottom: var(--s2); text-wrap: pretty; }
+.diag-strengths { font-family: var(--serif); font-size: 16px; line-height: 1.8; color: var(--ink-2); padding-bottom: var(--s3); text-wrap: pretty; }
+.diag-strengths b { font-family: var(--sans); font-size: 12px; font-weight: 700; margin-right: var(--s2); }
+.axes { list-style: none; padding: 0; margin: 0 0 var(--s2); border-top: 1px solid var(--rule); }
+.axis { border-bottom: 1px solid var(--rule); }
+.axis-row { display: flex; align-items: center; gap: var(--s3); width: 100%; padding: var(--s3) 0; background: none; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.axis-caret::before { content: '▸'; display: inline-block; font-size: 11px; color: var(--grey); transition: transform 0.15s; }
+.axis.is-open .axis-caret::before { transform: rotate(90deg); }
+.axis-name { flex: 1; font-size: 15px; font-weight: 600; }
+.axis-body { padding: 0 0 var(--s3) var(--s5); }
+.axis-q { font-size: 14px; font-weight: 600; margin-bottom: var(--s1); }
+.axis-ev { font-family: var(--serif); font-size: 15px; line-height: 1.75; color: var(--ink-2); margin-bottom: var(--s2); text-wrap: pretty; }
+.axis-subs { margin: 0 0 var(--s2); display: grid; gap: var(--s2); }
+.axis-sub dt { display: flex; align-items: center; gap: var(--s2); font-size: 13px; font-weight: 600; }
+.axis-sub dd { margin: 2px 0 0; font-size: 13px; line-height: 1.7; color: var(--ink-2); }
+.axis-help { font-size: 12px; color: var(--grey); }
+.axis-label { white-space: nowrap; }
+.diag-foot { font-size: 12px; color: var(--grey); padding-bottom: var(--s2); }
+.grade { font-size: 12px; font-weight: 600; padding: 1px var(--s2); border: 1px solid currentColor; border-radius: 2px; white-space: nowrap; }
+.gr-high { color: var(--ink); }
+.gr-mid { color: var(--ink-2); border-style: dashed; }
+.gr-low { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+.gr-none { color: var(--grey); }
 .sum-diag .diag { max-width: 46rem; margin-bottom: 0; }
 
 /* ── 역할 색 ── */
@@ -349,11 +360,14 @@ textarea:focus-visible, input:not([type='radio']):focus-visible { outline: none;
 /* 진단 평가: 튜터의 편집 메모 — 남색 바탕 카드로 글과 구별 */
 .diag { background: var(--tutor-tint); border-top-color: var(--tutor); padding: 0 var(--s5) var(--s2); border-bottom: 0; }
 .diag-kicker, .diag-toggle::after { color: var(--tutor); }
-.diag-claims { border-top-color: color-mix(in srgb, var(--tutor) 25%, transparent); }
-.diag-claim { border-bottom-color: color-mix(in srgb, var(--tutor) 18%, transparent); }
-.ev-strong .ev { color: var(--ev-good); }
-.ev-weak .ev { color: var(--ev-warn); border-style: dashed; background: transparent; }
-.ev-none .ev { color: var(--ev-warn); background: var(--ev-warn-tint); border-color: var(--ev-warn); }
+.axes { border-top-color: color-mix(in srgb, var(--tutor) 25%, transparent); }
+.axis { border-bottom-color: color-mix(in srgb, var(--tutor) 18%, transparent); }
+.axis-q { color: var(--tutor); }
+/* 등급: 잘 갖췄어요=초록 · 거의 왔어요=황토 점선 · 보완 필요=황토 채움 · 자료 없음=회색 (빨강은 지금 과제 전용) */
+.gr-high { color: var(--ev-good); }
+.gr-mid { color: var(--ev-warn); border-style: dashed; background: transparent; }
+.gr-low { color: var(--ev-warn); background: var(--ev-warn-tint); border-color: var(--ev-warn); }
+.gr-none { color: var(--grey); border-color: var(--rule); }
 /* 대화: 튜터는 남색, 학생은 초록 — 지난 대화도 말풍선으로 */
 .ln { padding: var(--s2) var(--s3); border-radius: 6px; max-width: 88%; }
 .ln-tutor { align-self: flex-start; background: var(--tutor-tint); color: var(--tutor); }

@@ -3,10 +3,7 @@
 
 export type Lang = 'ko' | 'en';
 
-// 첫 진단의 평가 — 학생에게 보여 주는 것. 턴마다 오가는 상태에는 넣지 않는다 (화면만 들고 있다)
-export type Evidence = 'strong' | 'weak' | 'none';
-export interface ClaimCheck { readonly paragraph: number; readonly claim: string; readonly evidence: Evidence; readonly note: string }
-export interface Assessment { readonly summary: string; readonly claims: readonly ClaimCheck[] }
+// 첫 진단의 평가(채점 루브릭)는 src/rubric.ts — 턴마다 오가는 상태에는 넣지 않는다 (화면만 들고 있다)
 
 // 'ended'는 문서에 없다 — 성공 확인(C4.6)이 끝났다는 표시가 따로 필요해서 더했다
 export type Stage = 'opening' | 'briefing' | 'content' | 'form' | 'closing' | 'ended';

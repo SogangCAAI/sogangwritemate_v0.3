@@ -30,7 +30,8 @@ export function Session({ start, onFinish }: Props) {
           listenPaused={editing && voice.held}
           onSave={saveEdit}
           onEditing={setEditing}
-          assessment={start.assessment}
+          rubric={start.rubric}
+          strengths={start.strengths}
         />
         <VoicePanel
           log={log}

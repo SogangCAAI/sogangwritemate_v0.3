@@ -23,6 +23,11 @@ const context = { posting: POSTING, paragraphs: ESSAY };
 const d = await call('diagnose', diagnose, { ...context, lang: 'ko' });
 if (!d) process.exit(1);
 console.log('  과제:', d.state.tasks.map((t: any) => `${t.order}.${t.kind} ${t.target?.paragraph}문단 ${t.goal}`).join(' / '));
+console.log('  잘한 점:', d.strengths);
+for (const [k, v] of Object.entries(d.rubric as Record<string, any>)) {
+  console.log(`  루브릭 ${k}: ${v.grade} — ${v.evidence}`);
+  for (const [sk, sv] of Object.entries((v.sub ?? {}) as Record<string, any>)) console.log(`    ${sk}: ${sv.grade} — ${sv.evidence}`);
+}
 console.log('  첫 말:', d.say);
 
 // 브리핑 파트를 쉼으로 넘기고(LLM 0회), 과제 시작 제안에 "네 좋아요"

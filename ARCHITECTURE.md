@@ -36,7 +36,7 @@
 | 단계 | 누가 | 무엇을 | LLM |
 |---|---|---|---|
 | 시작 | 학생 | 자기소개서(필수) · 지원 공고(선택) · 이력 메모(선택) · 언어 | — |
-| 첫 진단 | `/api/diagnose` | 평가(주장별 근거 등급) + 과제 3개(각 완료 기준·첫 질문) + 브리핑 3파트 | Sonnet 1회 |
+| 첫 진단 | `/api/diagnose` | 채점 루브릭(부록 B 5축 × 하/중/상, v2와 같은 판정) + 잘한 점 + 과제 3개(가장 낮은 축부터, 각 완료 기준·첫 질문) + 브리핑 3파트 | Sonnet 1회 |
 | 브리핑 | 코드 | 인사 → 브리핑 파트 1·2·3 (학생의 쉼이나 맞장구로 다음 파트) → 과제 1 시작 제안 | 0 |
 | 과제 진행 | `/api/turn` | 학생 발화 판정 + 튜터의 다음 말 | Haiku 1회/턴 |
 | 과제 수락 | 코드 | 진단이 만든 첫 질문(`opener`)을 바로 말함 | 0 |
@@ -90,7 +90,11 @@ SessionState
 
 과제 상태: `pending → active → done | skipped | timeout`. 시간 초과는 **제안**이고 강제가 아니다 (과제당 약 5분, 마감 3분 전 마무리 제안).
 
-첫 진단의 **평가**(`Assessment`: 글 전체 평 + 주장별 `{paragraph, claim, evidence: strong|weak|none, note}`)는 화면만 들고 있다. 턴마다 오가는 상태에는 넣지 않는다.
+첫 진단의 **평가**는 v2와 같은 채점 루브릭이다 (`src/rubric.ts`, 교수님 부록 B): 5축 `claim · hierarchy · alignment · cohesion · expression` 각각 `{grade: 하|중|상|판정불가, evidence}`, 정합성만 하위 둘 `transfer`(지원 업무와의 연결) · `consistency`(제공 자료와의 사실 일치)를 따로 내고 축 등급은 **판정할 수 있었던 하위 중 가장 나쁜 것**이다. 여기에 `strengths`(잘한 점) 한두 문장.
+- 프롬프트(`src/prompts/diagnose.md`)의 루브릭 기술어·판정 규칙은 v2 `prompts.ts`를 글자 그대로 옮겼다 (위계와 예증은 `experience_flow` 꺼진 갈래 = v2 기본). 정합성 안내는 공고나 이력이 있으면/없으면 두 갈래 (`Diagnoser`).
+- 파서는 진단을 실패시키지 않는다: 모양이 틀리거나 모르는 등급인 축은 그 축만 `판정불가`, 근거·잘한 점은 400자에서 자른다.
+- 과제마다 모델이 `axis`를 적고, 코드가 v2 `decideTargetStage` 규칙으로 순서를 다시 세운다 — 하 → 중 → 상, 같은 등급이면 축 순서.
+- 루브릭은 화면만 들고 있다 (응답 `{state, say, awaitPause, rubric, strengths}`). 턴마다 오가는 상태에는 넣지 않고, DB에는 `sessions.rubric`으로 남긴다.
 
 ## 5. 판정 라벨 (Haiku가 고른다, NCF 1차 13개)
 
@@ -122,7 +126,7 @@ SessionState
 
 | 호출 | 모델 | 생각 깊이(effort) | 시간 제한 | 출력 |
 |---|---|---|---|---|
-| 진단 | `claude-sonnet-5-5` | medium | 22초 | 평가 · 과제 3개 · 브리핑 |
+| 진단 | `claude-sonnet-5-5` | medium | 22초 | 루브릭 5축 · 잘한 점 · 과제 3개 · 브리핑 |
 | 턴 | `claude-haiku-5-5` | low | 12초 | 판정 + 튜터 말 |
 | 재평가 | `claude-haiku-5-5` | low | 12초 | {better, reason} |
 | 요약 | `claude-sonnet-5-5` | medium | 22초 | {report, nextSteps} |
@@ -152,7 +156,7 @@ SessionState
 | `voice/useVoice.ts` · `voice/types.ts` | 세 부품을 잇는 훅 — `Voice` 모양 (반이중: 튜터가 말하는 동안 인식 끔) |
 | `Masthead.tsx` · `TaskStrip.tsx` · `Stamp.tsx` | 제호 띠(CAAI 표기·남은 시간) · 과제 3꼭지 · 도장 |
 | `EssayPanel.tsx` · `AutoTextarea.tsx` | 글 전체를 문서로, 지금 문단은 늘 편집 가능, 다른 문단은 눌러서 고침 |
-| `DiagnosisNote.tsx` | 첫 진단 평가 (편집 메모) — 세션에선 브리핑 동안 펼침·과제 시작 후 접힘, 요약에서 다시 |
+| `RubricCard.tsx` | 첫 진단 평가 카드 (v2 RubricPanel과 같은 내용) — 축 다섯 줄(쉬운 이름 + 등급), 누르면 질문·근거·설명(원래 기준 이름), 정합성은 하위 둘 따로. 세션에선 브리핑 동안 펼침·과제 시작 후 접힘, 요약에서 다시 |
 | `VoicePanel.tsx` · `MicDesk.tsx` | 튜터의 지금 말(큰 자막) · 학생 실시간 자막 · 마이크 상태 · 말하기 힌트 · 글자 입력 보조 |
 | `Summary.tsx` | 과제 표 · 튜터의 정리 · 처음 진단 · 처음 글/끝 글 |
 | `styles.css` | 디자인 토큰(라이트/다크) — 규칙은 `DESIGN.md` |
@@ -161,7 +165,8 @@ SessionState
 
 ## 9. 저장 (`supabase/schema.sql`, 선택)
 
-- `sessions` — 언어·공고·처음 글·끝 글·과제 표·요약·성공 확인.
+- `sessions` — 언어·공고·처음 글·끝 글·과제 표·요약·성공 확인·첫 진단 루브릭(`rubric`: `{rubric, strengths}`).
+- 이미 만든 DB에는 `supabase/migrations/`의 파일을 차례로 더한다 (`20261103010000_rubric.sql`: `rubric` 칸).
 - `turns` — 턴마다 학생 말·튜터 말·`user_action`(판정 라벨)·`agent_action`(코드 행위)·`apr`(시퀀스 안의 자리)·판정 전체·지연.
   NCF 지표(시퀀스 완료율·상호작용 효율·확장 종류 분포)를 이 행들로 나중에 계산한다.
 - 서버만 service_role 키로 쓴다. RLS를 켜고 정책을 두지 않아 브라우저에서는 읽기·쓰기 모두 막힌다. 환경 변수가 없으면 저장만 건너뛴다.
@@ -173,6 +178,7 @@ sogang-tutor-v3/
 ├─ netlify/functions/   diagnose · turn · evaluate · summary · tts (입구, 각 8줄: 핸들러 만들고 handle(req))
 ├─ src/
 │  ├─ state.ts          타입(readonly) · 상수 (20분 · 과제 5분 · 마감 경고 3분) — 클라이언트·서버 공용
+│  ├─ rubric.ts         채점 루브릭 5축 · 등급 표시 말 · 가장 나쁜 하위 · 과제 순서 열쇠 — 클라이언트·서버 공용
 │  ├─ lines.ts          코드가 말하는 문장 (ko/en)
 │  ├─ checks.ts         문장 수 · 끝 질문 떼기 · 인용 검사 · 시간 · 상투 표현 사전
 │  ├─ decide.ts         예전 입구 next() · wantsPause · editNeedsEval · newSession → TutoringSession
@@ -193,7 +199,7 @@ sogang-tutor-v3/
 │  └─ client/           화면 (8절)
 ├─ tests/               decide 표 테스트(대본 목업) · conversation(국면) · sessionController · checks · handlers · validate (node:test)
 ├─ experiments/         판정 정확도 · 판정+응답 · 골드 29발화 · 실제 API 연기 시험
-├─ supabase/schema.sql
+├─ supabase/schema.sql · migrations/
 ├─ PRODUCT.md · DESIGN.md · ARCHITECTURE.md · FLOW.md
 └─ 제안·대본 목업 문서 3개
 ```

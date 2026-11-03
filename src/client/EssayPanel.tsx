@@ -1,8 +1,9 @@
 // 글 — 전체가 한 문서로 보인다. 지금 과제의 문단은 늘 고칠 수 있게 열려 있고, 다른 문단은 눌러서 그 자리에서 고친다.
 // '수정 저장'을 누르면 재평가로 간다. 입력칸에 커서가 있는 동안 듣기는 멈춘다(onEditing).
 import { useEffect, useState } from 'react';
-import type { Assessment, Task } from '../state';
-import { DiagnosisNote } from './DiagnosisNote';
+import type { Rubric } from '../rubric';
+import type { Task } from '../state';
+import { RubricCard } from './RubricCard';
 import { AutoTextarea } from './AutoTextarea';
 
 interface Props {
@@ -12,13 +13,14 @@ interface Props {
   listenPaused: boolean; // 편집 때문에 듣기를 멈춘 상태 — 안내를 보인다
   onSave: (paragraph: number, text: string) => Promise<boolean>;
   onEditing: (editing: boolean) => void;
-  assessment?: Assessment; // 첫 진단 — 글 위에 편집 메모로
+  rubric?: Rubric; // 첫 진단 — 글 위에 튜터의 평가 카드로
+  strengths?: string;
 }
 
 const folio = (n: number) => String(n).padStart(2, '0');
 const charCount = (ps: readonly string[]) => ps.reduce((sum, p) => sum + p.replace(/\s/g, '').length, 0);
 
-export function EssayPanel({ paragraphs, task, busy, listenPaused, onSave, onEditing, assessment }: Props) {
+export function EssayPanel({ paragraphs, task, busy, listenPaused, onSave, onEditing, rubric, strengths = '' }: Props) {
   const [drafts, setDrafts] = useState<readonly string[]>(paragraphs);
   const [open, setOpen] = useState<number | null>(null); // 과제 밖에서 고치는 문단 (1부터)
   const target = task?.target.paragraph;
@@ -52,7 +54,7 @@ export function EssayPanel({ paragraphs, task, busy, listenPaused, onSave, onEdi
         <p className="desk-meta">{paragraphs.length}문단 · {charCount(paragraphs)}자</p>
       </div>
       {/* 브리핑 동안 펼쳐 두고, 과제가 시작되면 접어 글이 보이게 (key로 다시 그려 기본 상태를 바꾼다) */}
-      {assessment && <DiagnosisNote key={task ? 'tasking' : 'briefing'} assessment={assessment} open={!task} />}
+      {rubric && <RubricCard key={task ? 'tasking' : 'briefing'} rubric={rubric} strengths={strengths} open={!task} />}
 
       {paragraphs.map((saved, i) => {
         const n = i + 1;

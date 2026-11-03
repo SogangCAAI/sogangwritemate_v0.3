@@ -9,7 +9,7 @@ import { parseSummary } from './outputs/summary';
 import { parseVerdict } from './outputs/verdict';
 
 export { ValidationError } from './fields';
-export { DIAGNOSE_TOOL, parseDiagnosis, type Diagnosis } from './outputs/diagnosis';
+export { DIAGNOSE_TOOL, parseDiagnosis, parseRubric, type Diagnosis } from './outputs/diagnosis';
 export { parseJudge, TURN_TOOL } from './outputs/judge';
 export { parseSummary, SUMMARY_TOOL, type Summary } from './outputs/summary';
 export { EVALUATE_TOOL, parseVerdict } from './outputs/verdict';

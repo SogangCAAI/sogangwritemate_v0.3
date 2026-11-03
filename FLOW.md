@@ -71,7 +71,7 @@ stateDiagram-v2
 
 ### BriefingPhase — `src/conversation/phases/BriefingPhase.ts`
 - **NCF**: C1 인사 + A3 Extended Telling (`open.pattern = A3`, 마무리 단계가 아닐 때)
-- **튜터가 방금**: 인사 또는 진단 브리핑 파트 하나 (코드)
+- **튜터가 방금**: 인사 또는 진단 브리핑 파트 하나 (코드). 파트 1은 루브릭의 잘한 점 하나와 가장 낮은 축(첫 과제의 축)을 학생의 말로, 파트 2는 과제 셋을 순서대로 (과제 순서 = 가장 낮은 축부터, `src/rubric.ts`)
 - **쉼을 기다림**: 예
 - 쉼 · CONTINUER · ANSWER · ACCEPT · REJECT · CLOSER → `Agenda.nextPart` (마지막 파트 끝에 과제 1 시작 제안이 붙어 있다)
 - USER_INQUIRY · EXEMPLAR_REQ → 기본값: 모델이 답하고 브리핑은 열린 채

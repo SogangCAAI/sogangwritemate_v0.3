@@ -6,7 +6,7 @@ import { api, errorText, type SummaryResult } from './ApiClient';
 import type { Start } from './types';
 import { Masthead } from './Masthead';
 import { Stamp } from './Stamp';
-import { DiagnosisNote } from './DiagnosisNote';
+import { RubricCard } from './RubricCard';
 
 interface Props { start: Start; state: SessionState; final: readonly string[]; onRestart: () => void }
 
@@ -53,7 +53,7 @@ export function Summary({ start, state, final, onRestart }: Props) {
         </table>
 
         <section className="sum-diag" aria-label="처음 진단">
-          <DiagnosisNote assessment={start.assessment} open={false} />
+          <RubricCard rubric={start.rubric} strengths={start.strengths} open={false} />
         </section>
 
         <section className="report" aria-live="polite" aria-labelledby="report-h">
