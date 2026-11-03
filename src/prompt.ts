@@ -25,6 +25,9 @@ export const essayText = (paragraphs: string[]) => paragraphs.map((p, i) => `${i
 
 export const langName = (lang: Lang) => (lang === 'en' ? 'English' : '한국어');
 
+// 공고는 선택 — 비어 있으면 모델이 공고를 지어내지 않도록 없다고 분명히 쓴다
+export const postingText = (posting: string) => posting || '(공고 없음 — 지원 분야를 모르는 일반 자기소개서로 본다. 공고 요구를 지어내지 않는다.)';
+
 export const TURN_TOOL: Tool = {
   name: 'respond',
   description: '판정과 튜터의 다음 말',
@@ -88,7 +91,7 @@ export function turnSystem(s: SessionState, ctx: Context): string {
   const t = activeTask(s);
   const hits = findCliches(ctx.paragraphs);
   return fill(loadPrompt(`tutor.${s.lang}.md`), {
-    posting: ctx.posting,
+    posting: postingText(ctx.posting),
     essay: essayText(ctx.paragraphs),
     tasks: s.tasks.map((x) => taskLine(x, s.lang)).join('\n'),
     cliches: hits.length ? `상투 표현 검출: ${hits.map((h) => `${h.paragraph}문단 "${h.text}"`).join(', ')}` : '',

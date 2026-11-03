@@ -6,7 +6,7 @@ import { saveSession } from '../../src/db';
 import { newSession, wantsPause } from '../../src/decide';
 import { handle, ok, readBody } from '../../src/http';
 import { callTool, MODELS, type Tool } from '../../src/llm';
-import { essayText, fill, langName, loadPrompt } from '../../src/prompt';
+import { essayText, fill, langName, loadPrompt, postingText } from '../../src/prompt';
 import { fromLlm } from '../../src/respond';
 import { LANGS, obj, oneOf, parseContext, parseDiagnosis, str } from '../../src/validate';
 
@@ -26,8 +26,9 @@ const TOOL: Tool = {
             keyword: { type: 'string' },
             goal: { type: 'string' },
             doneWhen: { type: 'string' },
+            opener: { type: 'string' },
           },
-          required: ['kind', 'paragraph', 'keyword', 'goal', 'doneWhen'],
+          required: ['kind', 'paragraph', 'keyword', 'goal', 'doneWhen', 'opener'],
         },
       },
       briefing: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'string' } },
@@ -48,7 +49,7 @@ export default (req: Request) =>
       model: MODELS.diagnose, maxTokens: 1500, tool: TOOL,
       system: 'You plan a 20-minute cover-letter tutoring session.',
       user: fill(loadPrompt('diagnose.md'), {
-        lang: langName(lang), posting: ctx.posting, essay: essayText(ctx.paragraphs), resume,
+        lang: langName(lang), posting: postingText(ctx.posting), essay: essayText(ctx.paragraphs), resume,
         cliches: hits.map((h) => `${h.paragraph}문단 "${h.text}" (${h.label})`).join('\n') || '-',
       }),
     });

@@ -1,23 +1,19 @@
-// 세션 화면 — 대화 기록 · 입력 · 힌트 칩 · 글 패널 · 과제 목록
+// 세션 화면 — 제호 띠(과제 세 꼭지) · 글 전체(기사 단) · 튜터 칸(말로 하는 대화)
 // 상태는 서버가 들고 있지 않다: 매 턴 지금 상태를 보내고 새 상태를 받는다.
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { mmss, sessionLeftMs } from '../checks';
 import { activeTask, type Move, type SessionState } from '../state';
 import { errorText, post, type TurnResult } from './api';
 import { EssayPanel } from './EssayPanel';
 import type { Start } from './Landing';
-import { TaskList } from './TaskList';
+import { Masthead } from './Masthead';
+import { TaskStrip } from './TaskStrip';
+import { useVoice } from './voice';
+import { VoicePanel, type Line } from './VoicePanel';
 
-interface Line { who: 'tutor' | 'student'; text: string }
-
-const CHIPS: { label: string; move: Move }[] = [
-  { label: '뭐라고요?', move: 'REPEAT_REQ' },
-  { label: '무슨 뜻이에요?', move: 'PARAPHRASE_REQ' },
-  { label: '예를 들면요?', move: 'EXAMPLE_REQ' },
-  { label: '그만할래요', move: 'ABORT' },
-];
-
-// 텍스트판의 '쉼' — 읽을 시간을 준 뒤 맞장구로 보고 다음으로 간다. 학생이 입력을 시작하면 멈춘다
+// '쉼' — 브리핑 파트는 튜터 말이 끝나고 이만큼 조용하면 다음으로 간다
+const AFTER_SPEECH_MS = 1000;
+// 소리로 말하지 못했을 때(음성 합성 없음)의 쉼 — 읽을 시간을 준다
 const pauseDelay = (said: string) => 1500 + said.length * 45;
 
 type TurnEvent = { kind: 'say'; text: string; move?: Move } | { kind: 'pause' };
@@ -30,40 +26,65 @@ export function Session({ start, onFinish }: { start: Start; onFinish: (s: Sessi
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [sayId, setSayId] = useState(0); // 지금 튜터 줄의 음성 번호 (0 = 소리로 말하지 않음)
   const [now, setNow] = useState(Date.now());
-  const logEnd = useRef<HTMLLIElement>(null);
+  const busyRef = useRef(false);
+
+  const ended = state.stage === 'ended';
+  const voice = useVoice({
+    lang: state.lang,
+    thinking: busy,
+    hold: editing || ended,
+    onFinal: (text) => void send({ kind: 'say', text }),
+  });
+  const { speak, toggleMic } = voice;
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
-  // 중괄호 필수 — 최신 Chrome의 scrollIntoView는 Promise를 돌려주고, effect가 그걸 반환하면 React가 정리 함수로 불러 화면이 통째로 죽는다
+  const speakLine = useCallback((text: string) => setSayId(speak(text)), [speak]);
+
+  // 첫 진단의 말을 소리로 — 시작하기를 누른 직후라 브라우저가 소리를 허용한다
   useEffect(() => {
-    logEnd.current?.scrollIntoView({ block: 'end' });
-  }, [log]);
+    if (start.say) speakLine(start.say);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function apply(r: TurnResult) {
     setState(r.state);
     setAwaitPause(r.awaitPause);
-    if (r.say) setLog((l) => [...l, { who: 'tutor', text: r.say! }]);
+    if (r.say) {
+      setLog((l) => [...l, { who: 'tutor', text: r.say! }]);
+      speakLine(r.say);
+    }
   }
 
   async function send(event: TurnEvent) {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError('');
     setAwaitPause(false);
-    if (event.kind === 'say') setLog((l) => [...l, { who: 'student', text: event.text }]);
+    if (event.kind === 'say') {
+      voice.stop(); // 학생이 말하면 튜터는 말을 멈춘다
+      setLog((l) => [...l, { who: 'student', text: event.text }]);
+    }
     try {
       apply(await post<TurnResult>('/api/turn', { state, context: { posting: start.posting, paragraphs }, history: log, event }));
     } catch (e) {
       setError(errorText(e));
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
 
-  async function saveEdit(paragraph: number, text: string) {
+  async function saveEdit(paragraph: number, text: string): Promise<boolean> {
+    if (busyRef.current) return false;
+    busyRef.current = true;
     setBusy(true);
     setError('');
     try {
@@ -72,81 +93,76 @@ export function Session({ start, onFinish }: { start: Start; onFinish: (s: Sessi
       });
       setParagraphs((ps) => ps.map((p, i) => (i === paragraph - 1 ? text : p)));
       apply(r);
+      return true;
     } catch (e) {
       setError(errorText(e));
+      return false;
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
 
+  // 쉼: 튜터 말이 끝까지 재생된 뒤(또는 소리가 없으면 읽을 시간 뒤) 학생이 조용하면 다음 파트로
   const lastTutor = [...log].reverse().find((l) => l.who === 'tutor')?.text ?? '';
   useEffect(() => {
-    if (!awaitPause || busy || draft) return;
-    const id = setTimeout(() => void send({ kind: 'pause' }), pauseDelay(lastTutor));
+    if (!awaitPause || busy || draft || voice.interim) return;
+    const spoken = sayId > 0;
+    if (spoken && voice.endedId !== sayId) return; // 아직 말하는 중
+    const id = setTimeout(() => void send({ kind: 'pause' }), spoken ? AFTER_SPEECH_MS : pauseDelay(lastTutor));
     return () => clearTimeout(id);
     // send는 매 렌더 새로 만들어진다 — 상태가 바뀔 때만 타이머를 다시 건다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, awaitPause, busy, draft]);
+  }, [state, awaitPause, busy, draft, voice.interim, voice.endedId, sayId]);
 
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    const text = draft.trim();
-    if (!text || busy) return;
-    setDraft('');
-    void send({ kind: 'say', text });
+  // Space = 마이크 켜고 끄기 (글을 입력하거나 버튼에 있을 때는 제외)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target instanceof HTMLElement ? e.target : null;
+      if (t?.closest('input, textarea, select, button, a, [contenteditable="true"]')) return;
+      e.preventDefault();
+      toggleMic();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [toggleMic]);
+
+  function finish() {
+    voice.stop();
+    onFinish(state, paragraphs);
   }
 
-  const ended = state.stage === 'ended';
-  const target = activeTask(state)?.target.paragraph;
+  const task = activeTask(state);
 
   return (
-    <main className="session">
-      <header className="bar">
-        <h1>서강 글벗</h1>
-        <span className="clock" aria-label="남은 시간">남은 시간 {mmss(Math.max(0, sessionLeftMs(state, now)))}</span>
-        <button type="button" className="ghost" onClick={() => onFinish(state, paragraphs)}>
-          {ended ? '요약 보기' : '세션 끝내기'}
-        </button>
-      </header>
-
-      <div className="cols">
-        <section className="chat" aria-label="대화">
-          <ol className="log" aria-live="polite">
-            {log.map((l, i) => (
-              <li key={i} className={l.who}>
-                <span className="sr-only">{l.who === 'tutor' ? '튜터: ' : '나: '}</span>
-                {l.text}
-              </li>
-            ))}
-            {busy && <li className="tutor pending">…</li>}
-            <li ref={logEnd} aria-hidden="true" />
-          </ol>
-          {error && <p className="error" role="alert">{error}</p>}
-          {ended ? (
-            <p className="ended">세션이 끝났어요. 위의 '요약 보기'를 눌러 주세요.</p>
-          ) : (
-            <>
-              <div className="chips" role="group" aria-label="빠른 응답">
-                {CHIPS.map((c) => (
-                  <button key={c.move} type="button" disabled={busy} onClick={() => void send({ kind: 'say', text: c.label, move: c.move })}>
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-              <form className="say" onSubmit={submit}>
-                <label htmlFor="say" className="sr-only">튜터에게 말하기</label>
-                <input id="say" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="여기에 답을 적어요" autoComplete="off" />
-                <button type="submit" disabled={busy || !draft.trim()}>보내기</button>
-              </form>
-            </>
-          )}
-        </section>
-
-        <aside className="side">
-          <TaskList tasks={state.tasks} />
-          <EssayPanel paragraphs={paragraphs} target={target} busy={busy || ended} onSave={saveEdit} />
-        </aside>
-      </div>
-    </main>
+    <div className="shell session">
+      <Masthead heading>
+        <p className="timer"><span>남은 시간</span><b>{mmss(Math.max(0, sessionLeftMs(state, now)))}</b></p>
+        <button type="button" className="btn" onClick={finish}>{ended ? '요약 보기' : '세션 끝내기'}</button>
+      </Masthead>
+      <TaskStrip tasks={state.tasks} />
+      <main className="page">
+        <EssayPanel
+          paragraphs={paragraphs}
+          task={task}
+          busy={busy || ended}
+          listenPaused={editing && voice.held}
+          onSave={saveEdit}
+          onEditing={setEditing}
+        />
+        <VoicePanel
+          log={log}
+          voice={voice}
+          busy={busy}
+          ended={ended}
+          error={error}
+          draft={draft}
+          onDraft={setDraft}
+          onSay={(text, move) => void send({ kind: 'say', text, move })}
+          onFinish={finish}
+        />
+      </main>
+    </div>
   );
 }

@@ -65,6 +65,7 @@ function parseTask(x: unknown, i: number): Task {
     target: { keyword: optStr(target.keyword, 'task.keyword'), paragraph: num(target.paragraph, 'task.paragraph') },
     goal: str(t.goal, 'task.goal', 300),
     doneWhen: str(t.doneWhen, 'task.doneWhen', 500),
+    opener: str(t.opener, 'task.opener', 400),
     status: oneOf(t.status, STATUSES, 'task.status'),
     evidence: optStr(t.evidence, 'task.evidence'),
     fromExemplar: bool(t.fromExemplar, 'task.fromExemplar'),
@@ -119,7 +120,8 @@ export function parseContext(x: unknown): Context {
   const c = obj(x, 'context');
   const paragraphs = strList(c.paragraphs, 'paragraphs', 20);
   if (paragraphs.length === 0) fail('paragraphs: 문단이 하나 이상 있어야 해요.');
-  return { posting: str(c.posting, 'posting', 6000), paragraphs };
+  // 공고는 선택 — 없으면 빈 문자열 (사용자 결정 2026-11-03)
+  return { posting: c.posting === undefined ? '' : str(c.posting, 'posting', 6000).trim(), paragraphs };
 }
 
 export interface Line { who: 'tutor' | 'student'; text: string }
@@ -174,12 +176,13 @@ export function parseDiagnosis(x: unknown, paragraphCount: number): Diagnosis {
       keyword: str(t.keyword, 'task.keyword', 60),
       goal: str(t.goal, 'task.goal', 120).trim(),
       doneWhen: str(t.doneWhen, 'task.doneWhen', 300).trim(),
+      opener: str(t.opener, 'task.opener', 300).trim(),
     };
   });
   const ordered = [...raw.filter((t) => t.kind === 'content'), ...raw.filter((t) => t.kind === 'form')];
   const tasks: Task[] = ordered.map((t, i) => ({
     id: `t${i + 1}`, order: (i + 1) as 1 | 2 | 3, kind: t.kind,
-    target: { paragraph: t.paragraph, keyword: t.keyword }, goal: t.goal, doneWhen: t.doneWhen,
+    target: { paragraph: t.paragraph, keyword: t.keyword }, goal: t.goal, doneWhen: t.doneWhen, opener: t.opener,
     status: 'pending', fromExemplar: false, turns: 0, edits: 0, experience: [], nudged: false,
   }));
   return { tasks, briefing };

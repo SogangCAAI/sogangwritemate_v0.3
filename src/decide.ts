@@ -97,7 +97,11 @@ function answer(s: SessionState, j: Judge, text: string): Outcome {
 
 function accept(s: SessionState, j: Judge, now: number): Outcome {
   const o = s.open;
-  if (o?.effect === 'startTask' && o.taskId) return modelSays(startTask(s, o.taskId, now), j, false);
+  // 과제 시작을 받으면 진단이 만든 첫 질문을 코드가 바로 한다 — 모델에 맡기면 "시작해 볼게요"로 멈춰 학생이 먼저 말해야 했다
+  if (o?.effect === 'startTask' && o.taskId) {
+    const t = s.tasks.find((x) => x.id === o.taskId);
+    if (t) return codeSays(startTask(s, t.id, now), `${lines(s.lang).startAck} ${t.opener}`, { pattern: 'A5.1', firstPair: t.opener }, 'A5.1');
+  }
   if (o?.effect === 'moveOn') return proposeNext(finish(s, 'timeout', now));
   if (o?.effect === 'close') return startClosing(finish(s, 'timeout', now), true);
   const t = activeTask(s);

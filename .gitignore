@@ -4,3 +4,4 @@ dist/
 .netlify/
 *.log
 .DS_Store
+.impeccable/mocks/

@@ -42,6 +42,7 @@ export interface Task {
   target: { keyword?: string; paragraph: number }; // paragraph는 1부터
   goal: string; // 학생에게 보여 줄 짧은 명사구 ("2문단에 협업 경험 넣기")
   doneWhen: string;
+  opener: string; // 과제를 여는 첫 질문 — 진단이 만들고, 학생이 과제를 수락하면 코드가 그대로 말한다
   status: TaskStatus;
   evidence?: string;
   fromExemplar: boolean;

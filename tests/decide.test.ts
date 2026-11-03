@@ -65,8 +65,9 @@ const TABLE: Row[] = [
       assert.ok(say?.startsWith(BRIEFING[2]!)); assert.ok(say?.includes('2문단에 협업 경험 넣기'));
       assert.deepEqual([state.open?.effect, state.open?.taskId], ['startTask', 't1']);
     } },
-  { id: 'M1-7 ACCEPT → T1 active', given: fresh, steps: BRIEFED,
-    expect: ({ state }) => {
+  { id: 'M1-7 ACCEPT → T1 active, 튜터가 바로 과제의 첫 질문을 한다 (학생이 먼저 말할 필요 없음)', given: fresh, steps: BRIEFED,
+    expect: ({ state, say }) => {
+      assert.equal(say, `${L.startAck} ${task(state, 't1').opener}`);
       assert.equal(statuses(state), 'active,pending,pending'); assert.equal(state.stage, 'content');
       assert.equal(state.open?.pattern, 'A5.1'); assert.equal(state.topic.keyword, '협업');
     } },
@@ -199,7 +200,7 @@ const TABLE: Row[] = [
   { id: 'M9-55·57 학생 질문 동안 A5.1 보존, "아 네"는 질문만 닫음', given: () => inTask3(),
     steps: [{ say: 'USER_INQUIRY', text: '글자 수 제한 있어요?', judge: { opens: 'A5.1', reply: '공고에는 제한이 없어요.' } }, { say: 'CLOSER', text: '아 네.' }],
     expect: ({ state }) => {
-      assert.equal(state.open?.pattern, 'A5.1'); assert.equal(state.open?.firstPair, '3문단 "열정을 가지고" 자리에 뭐가 들어가면 좋을까요?');
+      assert.equal(state.open?.pattern, 'A5.1'); assert.equal(state.open?.firstPair, task(state, 't3').opener);
     } },
 
   // M10 그만두기 · 시간 초과
@@ -228,12 +229,12 @@ const TABLE: Row[] = [
   { id: 'M11-61·62 PRE_CLOSING → 작별 전에 요약(A3)부터, 과제 표 그대로', given: () => inTask3(), steps: [{ say: 'PRE_CLOSING', text: '오늘은 여기까지 할게요.' }],
     expect: ({ state, say }) => {
       assert.equal(state.stage, 'closing'); assert.equal(state.open?.pattern, 'A3');
-      assert.equal(say, `${L.closingLead} 먼저, '2문단에 협업 경험 넣기' — 끝냈어요.`);
+      assert.equal(say, `${L.closingLead} 먼저, 2문단에 협업 경험 넣기 — 끝냈어요.`);
     } },
   { id: 'M11-64 마지막 파트 = 다음에 볼 것 + 성공 확인(C4)', given: () => inTask3(),
     steps: [{ say: 'PRE_CLOSING' }, { pause: true }, { pause: true }],
     expect: ({ state, say }) => {
-      assert.equal(say, `마지막으로, '3문단 표현 다듬기' — 다음에 이어서 봐요. ${L.successCheck}`); assert.equal(state.open?.pattern, 'C4');
+      assert.equal(say, `마지막으로, 3문단 표현 다듬기 — 다음에 이어서 봐요. ${L.successCheck}`); assert.equal(state.open?.pattern, 'C4');
     } },
   { id: 'M11-65 성공 확인 긍정 → 끝', given: () => inTask3(),
     steps: [{ say: 'PRE_CLOSING' }, { pause: true }, { pause: true }, { say: 'ANSWER', judge: { positive: true } }],

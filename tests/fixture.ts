@@ -11,7 +11,7 @@ export const ESSAY = [
 ];
 
 const task = (id: string, order: 1 | 2 | 3, kind: Task['kind'], paragraph: number, keyword: string, goal: string, doneWhen: string): Task => ({
-  id, order, kind, target: { paragraph, keyword }, goal, doneWhen,
+  id, order, kind, target: { paragraph, keyword }, goal, doneWhen, opener: `${paragraph}문단 '${keyword}' 얘기예요. 떠오르는 경험이 있어요?`,
   status: 'pending', fromExemplar: false, turns: 0, edits: 0, experience: [], nudged: false,
 });
 
