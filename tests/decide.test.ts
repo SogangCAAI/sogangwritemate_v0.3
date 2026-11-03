@@ -209,21 +209,25 @@ const TABLE: Row[] = [
       assert.equal(task(state, 't3').status, 'skipped'); assert.equal(task(state, 't3').evidence, '3문단은 그냥 됐어요.');
       assert.equal(say, L.abortTask); assert.ok(wantsPause(state));
     } },
-  { id: 'M10-59\' 세션 17분 → 마무리 제안 (강제 아님, 과제는 active)', given: () => inTask3(11), steps: [{ say: 'ANSWER', at: 17 }],
+  // 시간 규칙 (사용자 결정 2026-11-03): 과제 1에 집중 · 2·3은 시간이 될 때만 · 20분 전에 반드시 마무리
+  { id: '세션 17분(남은 3분) → 제안 없이 마무리 시작, 하던 과제는 timeout', given: () => inTask3(11), steps: [{ say: 'ANSWER', at: 17 }],
     expect: ({ state, say }) => {
-      assert.equal(say, L.closeSoon(3)); assert.equal(state.open?.effect, 'close');
-      assert.equal(task(state, 't3').status, 'active');
+      assert.equal(state.stage, 'closing'); assert.ok(say?.startsWith(L.timeUp));
+      assert.equal(task(state, 't3').status, 'timeout');
     } },
-  { id: 'M10-60\' 마무리 제안 수락 → T3 timeout → 마무리', given: () => inTask3(11), steps: [{ say: 'ANSWER', at: 17 }, { say: 'ACCEPT', at: 17 }],
-    expect: ({ state }) => { assert.equal(task(state, 't3').status, 'timeout'); assert.equal(state.stage, 'closing'); } },
-  { id: 'M10 "조금만 더요" → 계속, 다시 묻지 않음', given: () => inTask3(11),
-    steps: [{ say: 'ANSWER', at: 17 }, { say: 'REJECT', at: 17, text: '조금만 더요.' }, { say: 'ANSWER', at: 18 }],
-    expect: ({ state, say }) => { assert.equal(task(state, 't3').status, 'active'); assert.equal(say, '(모델 응답:ANSWER)'); } },
-  { id: '과제 5분 초과 → 넘어가자 제안, 수락하면 timeout + 다음 과제 제안', given: inTask1,
-    steps: [{ say: 'ANSWER', at: 7 }, { say: 'ACCEPT', at: 7 }],
-    expect: ({ state }) => { assert.equal(task(state, 't1').status, 'timeout'); assert.equal(state.open?.taskId, 't2'); } },
-  { id: '과제 시간 제안은 한 번만', given: inTask1, steps: [{ say: 'ANSWER', at: 7 }, { say: 'REJECT', at: 7 }, { say: 'ANSWER', at: 8 }],
-    expect: ({ state, say }) => { assert.equal(say, '(모델 응답:ANSWER)'); assert.equal(activeTask(state)?.id, 't1'); } },
+  { id: '학생이 말이 없어도 — 남은 3분의 쉼 이벤트로 마무리 시작', given: inTask1, steps: [{ pause: true, at: 17 }],
+    expect: ({ state, say }) => { assert.equal(state.stage, 'closing'); assert.ok(say?.startsWith(L.timeUp)); assert.equal(task(state, 't1').status, 'timeout'); } },
+  { id: '과제 1이 오래 걸려도(9분) 다음으로 넘기자고 하지 않는다', given: inTask1, steps: [{ say: 'ANSWER', at: 9 }],
+    expect: ({ state, say }) => { assert.equal(say, '(모델 응답:ANSWER)'); assert.equal(activeTask(state)?.id, 't1'); assert.equal(state.open?.effect, undefined); } },
+  { id: '과제를 끝냈을 때 남은 시간이 7분보다 적으면 다음 과제 대신 마무리', given: inTask1,
+    steps: [{ edit: 2, after: '고침', verdict: { better: true, reason: '행동과 결과가 보여요.' }, at: 14 }, { pause: true, at: 14 }],
+    expect: ({ state }) => {
+      assert.equal(task(state, 't1').status, 'done'); assert.equal(task(state, 't2').status, 'pending');
+      assert.equal(state.stage, 'closing');
+    } },
+  { id: '과제를 끝냈을 때 시간이 충분하면(남은 7분 이상) 과제 2를 제안', given: inTask1,
+    steps: [{ edit: 2, after: '고침', verdict: { better: true, reason: '행동과 결과가 보여요.' }, at: 12 }, { pause: true, at: 12 }],
+    expect: ({ state }) => { assert.equal(state.open?.effect, 'startTask'); assert.equal(state.open?.taskId, 't2'); } },
 
   // M11 마무리
   { id: 'M11-61·62 PRE_CLOSING → 작별 전에 요약(A3)부터, 과제 표 그대로', given: () => inTask3(), steps: [{ say: 'PRE_CLOSING', text: '오늘은 여기까지 할게요.' }],

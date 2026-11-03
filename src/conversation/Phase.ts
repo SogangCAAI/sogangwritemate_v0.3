@@ -77,7 +77,7 @@ export abstract class Phase {
   }
 
   // 쉼 — 기본은 아무 일도 없다
-  onPause(): Outcome {
+  onPause(_now: number): Outcome {
     return Say.nothing(this.s);
   }
 }

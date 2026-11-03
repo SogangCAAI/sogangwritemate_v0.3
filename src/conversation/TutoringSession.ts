@@ -17,7 +17,8 @@
 //   REPEAT/PARAPHRASE/EXAMPLE_REQ → RepairHandler.replay (B2, last에서 코드가 답함)
 //   UNCLEAR                       → RepairHandler.unclear (B1.2, 1·2·3회)
 //   PRE_CLOSING                   → Agenda.startClosing (요약부터)
-//   시간 제안(P1:moveOn·close)     → 답·맞장구·수락·인정 뒤 Agenda.nudge가 끼어든다
+//   남은 시간 3분                  → Agenda.closeForTime (제안 아님 — 20분 전에 마무리; 쉼·답 뒤에 확인)
+//   과제를 끝냈을 때 남은 시간 < 7분 → 다음 과제 대신 마무리 (과제 2·3은 시간이 될 때만)
 // ────────────────────────────────────────────────────────────────────────────────
 import type { Judge, Lang, Outcome, SessionState, Task, TurnEvent } from '../state';
 import { activeTask } from '../state';
@@ -74,7 +75,7 @@ export class TutoringSession {
   // 이벤트 하나 → 결과 하나 (decide.next()가 이것을 부른다)
   handle(judge: Judge | null, ev: TurnEvent): Outcome {
     if (this.phase.isOver) return Say.nothing(this.state);
-    if (ev.kind === 'pause') return this.onPause();
+    if (ev.kind === 'pause') return this.onPause(ev.now);
     if (ev.kind === 'edit') return this.onEdit(ev);
     if (!judge) throw new Error('next(): 학생 발화에는 판정이 필요합니다');
     return this.onSay(judge, ev.text, ev.now);
@@ -104,9 +105,10 @@ export class TutoringSession {
     }
   }
 
-  // 쉼 — 튜터 말이 끝나고 학생이 조용했다
-  onPause(): Outcome {
-    return this.phase.onPause();
+  // 쉼 — 튜터 말이 끝나고 학생이 조용했다. 화면은 남은 시간이 3분이 되면 말이 없어도 쉼을 보낸다 → 마무리
+  onPause(now: number): Outcome {
+    if (Agenda.timeUp(this.state, now)) return Agenda.closeForTime(this.state, now);
+    return this.phase.onPause(now);
   }
 
   // 학생이 문단을 고쳐 저장했다 — 어느 국면에서 와도 같은 규칙 (EditingPhase)

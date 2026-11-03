@@ -36,7 +36,7 @@ export class ClosingPhase extends Phase {
   override onInquiry(j: Judge): Outcome { return this.reply(j); }
   override onExemplarRequest(j: Judge): Outcome { return this.reply(j); }
 
-  override onPause(): Outcome {
+  override onPause(_now: number): Outcome {
     return this.summarizing ? Agenda.nextPart(this.s) : Say.nothing(this.s);
   }
 

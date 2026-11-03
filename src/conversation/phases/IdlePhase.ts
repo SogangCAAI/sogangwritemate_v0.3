@@ -16,7 +16,7 @@ export class IdlePhase extends Phase {
     return this.s.open === null;
   }
 
-  override onPause(): Outcome {
-    return this.awaitsPause ? Agenda.proposeNext(this.s) : Say.nothing(this.s);
+  override onPause(now: number): Outcome {
+    return this.awaitsPause ? Agenda.proposeNext(this.s, now) : Say.nothing(this.s);
   }
 }

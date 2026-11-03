@@ -20,8 +20,7 @@ const KO = {
   successCheck: '오늘 고친 글, 처음보다 나아진 것 같아요?',
   proposeTask: (goal: string) => `다음 과제는 ${goal}, 시작해 볼까요?`,
   firstTask: (goal: string) => `${goal}부터 볼까요?`,
-  moveOn: (goal: string) => `${goal}에 시간이 꽤 들었어요. 여기까지 하고 다음으로 갈까요?`,
-  closeSoon: (min: number) => `시간이 ${min}분 남았어요. 여기까지 하고 정리할까요?`,
+  timeUp: '시간이 거의 다 됐어요. 오늘은 여기서 정리할게요.',
   status: { done: '끝냈어요.', skipped: '이번엔 건너뛰었어요.', rest: '다음에 이어서 봐요.' },
 };
 
@@ -44,8 +43,7 @@ const EN: typeof KO = {
   successCheck: 'Does your draft feel better than when we started?',
   proposeTask: (goal: string) => `Next up: '${goal}'. Shall we start?`,
   firstTask: (goal: string) => `Shall we start with '${goal}'?`,
-  moveOn: (goal: string) => `We've spent a while on '${goal}'. Shall we stop here and move on?`,
-  closeSoon: (min: number) => `We have ${min} minutes left. Shall we stop here and wrap up?`,
+  timeUp: "We're almost out of time. Let's wrap up here.",
   status: { done: 'done.', skipped: 'skipped this time.', rest: "we'll pick it up next time." },
 };
 

@@ -30,7 +30,7 @@ export class BriefingPhase extends Phase {
   override onCloser(_j: Judge): Outcome { return this.advance(); }
 
   // 쉼 = 맞장구 — 학생 발화를 기다리지 않고 다음 파트로
-  override onPause(): Outcome {
+  override onPause(_now: number): Outcome {
     return Agenda.nextPart(this.s);
   }
 

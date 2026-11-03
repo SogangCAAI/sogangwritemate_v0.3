@@ -39,7 +39,7 @@ test('TutoringSession은 받은 상태를 바꾸지 않고 toState로 같은 객
   const frozen = structuredClone(s);
   const session = TutoringSession.from(s);
   session.onSay(j('CONTINUER'), '네.', T0);
-  session.onPause();
+  session.onPause(T0);
   assert.deepEqual(s, frozen);
   assert.equal(session.toState(), s);
 });
@@ -47,7 +47,7 @@ test('TutoringSession은 받은 상태를 바꾸지 않고 toState로 같은 객
 test('끝난 세션은 말·쉼·편집 모두 그대로', () => {
   const s: SessionState = { ...fresh(), stage: 'ended', open: null };
   const session = TutoringSession.from(s);
-  for (const o of [session.onSay(j('ANSWER'), 'x', T0), session.onPause(), session.onEdit({ kind: 'edit', paragraph: 2, after: 'x', verdict: null, now: T0 })]) {
+  for (const o of [session.onSay(j('ANSWER'), 'x', T0), session.onPause(T0), session.onEdit({ kind: 'edit', paragraph: 2, after: 'x', verdict: null, now: T0 })]) {
     assert.equal(o.state, s); assert.equal(o.say, null);
   }
 });

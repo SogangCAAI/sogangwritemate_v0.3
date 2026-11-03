@@ -1,6 +1,7 @@
 // 튜터 말하기 — 서버 TTS(/api/tts)를 <audio>로 재생하고, 서버 음성이 없으면 브라우저 내장 speechSynthesis.
 // <audio>로 재생해야 Chrome의 메아리 제거가 그 소리를 기준 신호로 삼아 마이크에서 걸러 낸다 (BargeInDetector).
 // 줄마다 번호를 붙인다 — 끝까지 말했거나 끊기면 onEnd(번호). 그새 다음 줄로 넘어간 늦은 소리는 버린다.
+import { toSpoken } from '../../spoken';
 import type { Lang } from '../../state';
 import { LOCALE, synthAvailable } from './types';
 
@@ -48,7 +49,8 @@ export class TutorSpeaker {
   get startedAt(): number { return this.playStartedAt; }
 
   // 말할 줄의 번호 (빈 줄이면 0)
-  speak(text: string, lang: Lang): number {
+  speak(shown: string, lang: Lang): number {
+    const text = toSpoken(shown, lang); // 화면은 "1문단", 소리는 "첫째 문단" — 메아리 대조도 소리로 낸 말로
     if (!text.trim()) return 0;
     this.stop();
     const id = ++this.nextId;

@@ -107,8 +107,9 @@ export interface Outcome {
 }
 
 export const SESSION_MS = 20 * 60_000;
-export const TASK_BUDGET_MS = 5 * 60_000;
-export const CLOSE_WARN_MS = 3 * 60_000; // 남은 시간이 이만큼이면 마무리를 제안
+// 시간 규칙 (사용자 결정 2026-11-03): 과제 1에 집중하고, 시간이 남을 때만 과제 2·3, 20분 전에 반드시 마무리
+export const CLOSE_AT_LEFT_MS = 3 * 60_000; // 남은 시간이 이만큼이면 마무리를 시작한다 (제안이 아니다)
+export const NEXT_TASK_MIN_LEFT_MS = 7 * 60_000; // 과제를 끝냈을 때 이만큼 남아야 다음 과제를 제안한다
 
 export function activeTask(s: SessionState): Task | undefined {
   return s.tasks.find((t) => t.status === 'active');

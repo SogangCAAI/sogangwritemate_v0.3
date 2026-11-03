@@ -27,7 +27,7 @@ export class TaskProposalPhase extends Phase {
       const t = Tasks.find(s, o.taskId);
       if (t) return Say.code(Tasks.start(s, t.id, now), `${lines(s.lang).startAck} ${t.opener}`, { pattern: 'A5.1', firstPair: t.opener }, 'A5.1');
     }
-    if (o?.effect === 'moveOn') return Agenda.proposeNext(Tasks.finish(s, 'timeout', now));
+    if (o?.effect === 'moveOn') return Agenda.proposeNext(Tasks.finish(s, 'timeout', now), now);
     if (o?.effect === 'close') return Agenda.startClosing(Tasks.finish(s, 'timeout', now), true);
     return super.onAccept(j, now);
   }
@@ -36,7 +36,7 @@ export class TaskProposalPhase extends Phase {
     const o = this.s.open;
     if (o?.effect === 'startTask' && o.taskId) {
       const s1 = Tasks.skip({ ...this.s, repaired: false }, o.taskId, text, now);
-      return Agenda.proposeNext({ ...s1, open: null }, lines(this.s.lang).ok);
+      return Agenda.proposeNext({ ...s1, open: null }, now, lines(this.s.lang).ok);
     }
     return super.onReject(j, text, now);
   }

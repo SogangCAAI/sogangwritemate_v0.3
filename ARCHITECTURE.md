@@ -88,7 +88,7 @@ SessionState
 └─ startedAt · helped · closeOffered
 ```
 
-과제 상태: `pending → active → done | skipped | timeout`. 시간 초과는 **제안**이고 강제가 아니다 (과제당 약 5분, 마감 3분 전 마무리 제안).
+과제 상태: `pending → active → done | skipped | timeout`. 시간 규칙: 과제 1에 집중(과제별 시간 제안 없음), 과제를 끝냈을 때 남은 시간이 7분 이상일 때만 다음 과제, 남은 3분이면 **제안 없이** 마무리 시작, 0분이면 요약 화면 (FLOW.md '시간 규칙').
 
 첫 진단의 **평가**는 v2와 같은 채점 루브릭이다 (`src/rubric.ts`, 교수님 부록 B): 5축 `claim · hierarchy · alignment · cohesion · expression` 각각 `{grade: 하|중|상|판정불가, evidence}`, 정합성만 하위 둘 `transfer`(지원 업무와의 연결) · `consistency`(제공 자료와의 사실 일치)를 따로 내고 축 등급은 **판정할 수 있었던 하위 중 가장 나쁜 것**이다. 여기에 `strengths`(잘한 점) 한두 문장.
 - 프롬프트(`src/prompts/diagnose.md`)의 루브릭 기술어·판정 규칙은 v2 `prompts.ts`를 글자 그대로 옮겼다 (위계와 예증은 `experience_flow` 꺼진 갈래 = v2 기본). 정합성 안내는 공고나 이력이 있으면/없으면 두 갈래 (`Diagnoser`).
@@ -177,7 +177,7 @@ SessionState
 sogang-tutor-v3/
 ├─ netlify/functions/   diagnose · turn · evaluate · summary · tts (입구, 각 8줄: 핸들러 만들고 handle(req))
 ├─ src/
-│  ├─ state.ts          타입(readonly) · 상수 (20분 · 과제 5분 · 마감 경고 3분) — 클라이언트·서버 공용
+│  ├─ state.ts          타입(readonly) · 상수 (20분 · 다음 과제 최소 7분 · 마무리 3분) — 클라이언트·서버 공용
 │  ├─ rubric.ts         채점 루브릭 5축 · 등급 표시 말 · 가장 나쁜 하위 · 과제 순서 열쇠 — 클라이언트·서버 공용
 │  ├─ lines.ts          코드가 말하는 문장 (ko/en)
 │  ├─ checks.ts         문장 수 · 끝 질문 떼기 · 인용 검사 · 시간 · 상투 표현 사전

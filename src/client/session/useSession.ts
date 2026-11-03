@@ -1,6 +1,7 @@
 // 세션 화면의 훅 — SessionController를 화면 상태와 음성에 잇는다. 화면 컴포넌트는 이 결과로 그리기만 한다
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import type { Move, SessionState } from '../../state';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { sessionLeftMs } from '../../checks';
+import { CLOSE_AT_LEFT_MS, type Move, type SessionState } from '../../state';
 import { api } from '../ApiClient';
 import type { Start } from '../types';
 import { useVoice } from '../voice';
@@ -43,6 +44,20 @@ export function useSession(start: Start, onFinish: (s: SessionState, final: read
     stop();
     onFinish(view.state, view.paragraphs);
   }, [stop, onFinish, view.state, view.paragraphs]);
+
+  // 20분 전에 반드시 마무리 — 남은 3분이면 학생이 말이 없어도 쉼을 보내 서버가 마무리를 시작하게 하고,
+  // 0분이 되면 요약 화면으로 넘어간다
+  const left = sessionLeftMs(view.state, now);
+  const inTask = view.state.stage === 'content' || view.state.stage === 'form';
+  const closeAsked = useRef(false);
+  useEffect(() => {
+    if (!inTask || left > CLOSE_AT_LEFT_MS || view.busy || closeAsked.current) return;
+    closeAsked.current = true;
+    void ctl.send({ kind: 'pause' });
+  }, [inTask, left, view.busy, ctl]);
+  useEffect(() => {
+    if (left <= 0 && !ended) finish();
+  }, [left, ended, finish]);
 
   return {
     view, voice, now, ended, draft, setDraft, editing, setEditing, finish,

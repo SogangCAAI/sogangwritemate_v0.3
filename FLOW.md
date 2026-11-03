@@ -43,7 +43,7 @@ stateDiagram-v2
   Idle --> TaskProposal: 쉼 → 다음 과제 제안
   Idle --> Closing: 쉼, 남은 과제 없음
 
-  Experience --> TaskProposal: 시간 (과제 5분 · 세션 17분)<br/>ANSWER · CONTINUER · ACCEPT · CLOSER 뒤 nudge
+  Experience --> Closing: 남은 3분 (세션 17분) — 답·맞장구·수락·인정 뒤, 또는 화면이 보낸 쉼
   Editing --> TaskProposal: 시간 nudge
   Conclusion --> TaskProposal: 시간 nudge
 
@@ -79,7 +79,7 @@ stateDiagram-v2
 
 ### TaskProposalPhase — `phases/TaskProposalPhase.ts`
 - **NCF**: 우리 패턴 P1 중 코드가 뜻을 정한 제안 (`open.effect` = startTask · moveOn · close)
-- **튜터가 방금** (코드): 과제 시작 제안 · 과제 5분 초과 "다음으로 갈까요?" · 마감 3분 전 "정리할까요?"
+- **튜터가 방금** (코드): 과제 시작 제안. (moveOn·close 제안은 2026-11-03부터 만들지 않는다 — 시간 규칙은 아래 '시간 규칙')
 - ACCEPT startTask → `Tasks.start` + "좋아요. {opener}" (코드, A5.1) → Experience
 - ACCEPT moveOn → 과제 timeout → `Agenda.proposeNext` / ACCEPT close → 과제 timeout → `Agenda.startClosing`
 - REJECT startTask → 그 과제 skipped (재설득 없음) → "네. 다음 과제는 …" / REJECT moveOn·close → 모델이 이어 감 (다시 묻지 않음: `nudged` · `closeOffered`)
@@ -150,3 +150,11 @@ stateDiagram-v2
 | M4-21 | "아 네." ACCEPT | `onSay` | Editing`.onAccept` → 기본값 | 모델 짧은 답, `open=null` |
 | M4-22 | [편집] 2문단 | `EvaluateHandler` → `onEdit` | `EditingPhase.onEdit` (better=true) | t1 done, `edits=2`, "좋아졌어요. {reason}" (코드) → **Idle** (쉼 기다림) |
 | M4-24 | (쉼) | `onPause` | Idle`.onPause` → `Agenda.proposeNext` | "다음 과제는 …, 시작해 볼까요?" `open=P1 startTask t2` → **TaskProposal** |
+
+## 시간 규칙 (사용자 결정 2026-11-03)
+
+- **과제 1에 집중한다.** 과제가 오래 걸려도 "다음으로 갈까요?"라고 하지 않는다 (예전 5분 제안은 없앴다).
+- **과제 2·3은 시간이 될 때만.** 과제를 끝냈을 때 남은 시간이 7분 이상이면 다음 과제를 제안하고, 적으면 마무리로 (`Agenda.proposeNext`, `NEXT_TASK_MIN_LEFT_MS`).
+- **20분 전에 반드시 마무리.** 남은 시간이 3분이면 제안 없이 마무리를 시작하고 하던 과제는 timeout으로 남긴다 (`Agenda.closeForTime`, `CLOSE_AT_LEFT_MS`).
+  학생이 말이 없어도 화면이 그때 쉼 이벤트를 보내고(`useSession`), 0분이 되면 요약 화면으로 넘어간다.
+- 브리핑은 "먼저 과제 1에 집중하고, 시간이 남으면 2·3도 볼게요"로 말하고, 과제 띠는 2·3을 "시간 되면"으로 보인다.
