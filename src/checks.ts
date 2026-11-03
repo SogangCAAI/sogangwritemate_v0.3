@@ -13,12 +13,6 @@ export function capSentences(text: string, max = 2): string {
   return sentences(text).slice(0, max).join(' ');
 }
 
-// 답·설명 바로 뒤에 질문을 붙이지 않는다 — 학생이 닫거나 되물을 자리 (NCF 2절, p.13)
-export function stripTrailingQuestion(text: string): string {
-  const s = sentences(text);
-  if (s.length < 2 || !/[?？]["”’']?$/.test(s[s.length - 1]!)) return text.trim();
-  return s.slice(0, -1).join(' ');
-}
 
 // 튜터 말 안의 인용("…")이 글·공고·시범 문장 어디에도 없으면 돌려준다 — 지어낸 인용 기록용
 export function missingQuotes(text: string, sources: string[]): string[] {

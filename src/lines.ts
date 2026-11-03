@@ -4,6 +4,10 @@ import type { Lang, Task } from './state';
 const KO = {
   ok: '네.',
   startAck: '좋아요.',
+  // 튜터가 이끈다 — 모델 말이 다음 걸음 없이 끝났을 때 코드가 붙이는 한 줄 (과제 단계별)
+  leadDraft: (p: number) => `그 얘기를 ${p}문단에 넣는다면 어떤 문장이 될까요?`,
+  leadEdit: (p: number) => `그럼 ${p}문단을 지금 고쳐 볼래요?`,
+  leadForm: (p: number) => `${p}문단에서 그 부분을 어떻게 바꿔 볼까요?`,
   bye: '네, 수고 많았어요.',
   greeting: '안녕하세요, 자기소개서를 같이 고칠 튜터 글벗이에요. 올려 주신 글을 먼저 읽어 봤어요.',
   noParaphrase: '다르게 말하기가 어렵네요. 어느 부분이 헷갈려요?',
@@ -30,6 +34,9 @@ const KO = {
 const EN: typeof KO = {
   ok: 'Okay.',
   startAck: 'Great.',
+  leadDraft: (p: number) => `If you put that into paragraph ${p}, what sentence would it be?`,
+  leadEdit: (p: number) => `Want to try editing paragraph ${p} now?`,
+  leadForm: (p: number) => `How would you change that part of paragraph ${p}?`,
   bye: 'Okay, great work today.',
   greeting: "Hi, I'm Geulbeot, your tutor for this cover letter. I've read your draft.",
   noParaphrase: "That's hard to put another way. Which part is unclear?",

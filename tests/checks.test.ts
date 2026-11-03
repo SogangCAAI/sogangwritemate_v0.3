@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { capSentences, findCliches, missingQuotes, mmss, sentences, sessionLeftMs, stripTrailingQuestion } from '../src/checks';
+import { capSentences, findCliches, missingQuotes, mmss, sentences, sessionLeftMs } from '../src/checks';
 import { ESSAY, fresh, MIN, T0 } from './fixture';
 
 test('문장 나누기 — 한국어·영어·닫는 따옴표', () => {
@@ -14,12 +14,6 @@ test('기본 2문장, 마무리는 3문장까지 자른다', () => {
   assert.equal(capSentences(t), '하나. 둘.');
   assert.equal(capSentences(t, 3), '하나. 둘. 셋.');
   assert.equal(capSentences('짧아요.'), '짧아요.');
-});
-
-test('답 뒤에 붙은 질문을 뗀다 — 질문 하나뿐이면 그대로', () => {
-  assert.equal(stripTrailingQuestion('공고에는 제한이 없어요. 다음으로 갈까요?'), '공고에는 제한이 없어요.');
-  assert.equal(stripTrailingQuestion('어디가 걸려요?'), '어디가 걸려요?');
-  assert.equal(stripTrailingQuestion('제한은 없어요.'), '제한은 없어요.');
 });
 
 test('글·공고에 없는 인용만 돌려준다', () => {
