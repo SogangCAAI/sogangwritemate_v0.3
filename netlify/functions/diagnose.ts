@@ -32,8 +32,28 @@ const TOOL: Tool = {
         },
       },
       briefing: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'string' } },
+      assessment: {
+        type: 'object',
+        properties: {
+          summary: { type: 'string' },
+          claims: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                paragraph: { type: 'integer' },
+                claim: { type: 'string' },
+                evidence: { type: 'string', enum: ['strong', 'weak', 'none'] },
+                note: { type: 'string' },
+              },
+              required: ['paragraph', 'claim', 'evidence', 'note'],
+            },
+          },
+        },
+        required: ['summary', 'claims'],
+      },
     },
-    required: ['tasks', 'briefing'],
+    required: ['tasks', 'briefing', 'assessment'],
   },
 };
 
@@ -57,7 +77,7 @@ export default (req: Request) =>
     const state = newSession({ id: randomUUID(), lang, tasks: d.tasks, briefing: d.briefing, now: Date.now() });
 
     await saveSession({ id: state.id, lang, posting: ctx.posting, essay: ctx.paragraphs, tasks: state.tasks });
-    return ok({ state, say: state.last.played, awaitPause: wantsPause(state) });
+    return ok({ state, say: state.last.played, awaitPause: wantsPause(state), assessment: d.assessment });
   });
 
 export const config: Config = { path: '/api/diagnose' };

@@ -304,3 +304,24 @@ textarea:focus-visible, input:not([type='radio']):focus-visible { outline: none;
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* 편집 메모 · 첫 진단 — 글 위, 잉크와 회색만 (빨강은 지금 과제 전용) */
+.diag { max-width: calc(56px + 46rem); border-top: 3px solid var(--ink); border-bottom: 1px solid var(--rule); margin-bottom: var(--s6); }
+.diag summary { list-style: none; display: flex; justify-content: space-between; align-items: center; padding: var(--s2) 0; cursor: pointer; }
+.diag summary::-webkit-details-marker { display: none; }
+.diag-kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; }
+.diag-toggle::after { content: '접기'; font-size: 12px; color: var(--grey); text-decoration: underline; text-underline-offset: 3px; }
+.diag:not([open]) .diag-toggle::after { content: '펼치기'; }
+.diag-summary { font-family: var(--serif); font-size: 16px; line-height: 1.8; color: var(--ink-2); padding-bottom: var(--s3); text-wrap: pretty; }
+.diag-claims { list-style: none; padding: 0; margin: 0 0 var(--s3); display: grid; gap: 0; border-top: 1px solid var(--rule); }
+.diag-claim { display: grid; grid-template-columns: 56px minmax(0, 1fr); padding: var(--s3) 0; border-bottom: 1px solid var(--rule); }
+.diag-claim:last-child { border-bottom: 0; }
+.diag-claim .folio { padding-top: 2px; }
+.diag-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2) var(--s3); font-size: 15px; }
+.diag-line b { font-weight: 600; }
+.ev { font-size: 12px; font-weight: 600; padding: 1px var(--s2); border: 1px solid currentColor; border-radius: 2px; white-space: nowrap; }
+.ev-strong .ev { color: var(--ink); }
+.ev-weak .ev { color: var(--ink-2); border-style: dashed; }
+.ev-none .ev { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+.diag-note { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+.sum-diag .diag { max-width: 46rem; margin-bottom: 0; }

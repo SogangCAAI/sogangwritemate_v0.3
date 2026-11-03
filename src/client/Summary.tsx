@@ -6,6 +6,7 @@ import { errorText, post, type SummaryResult } from './api';
 import type { Start } from './Landing';
 import { Masthead } from './Masthead';
 import { Stamp } from './Stamp';
+import { DiagnosisNote } from './DiagnosisNote';
 
 interface Props { start: Start; state: SessionState; final: string[]; onRestart: () => void }
 
@@ -50,6 +51,10 @@ export function Summary({ start, state, final, onRestart }: Props) {
             ))}
           </tbody>
         </table>
+
+        <section className="sum-diag" aria-label="처음 진단">
+          <DiagnosisNote assessment={start.assessment} open={false} />
+        </section>
 
         <section className="report" aria-live="polite" aria-labelledby="report-h">
           <h2 id="report-h">튜터의 정리</h2>

@@ -1,7 +1,7 @@
 // 신뢰 경계 검사 — 요청 본문(클라이언트가 보낸 상태 포함)과 LLM 도구 출력. 작은 손 검사만 쓴다.
 import {
   MOVES, PATTERNS,
-  type Judge, type Lang, type Move, type Open, type SessionState, type Stage, type Task, type TaskKind, type TaskStatus, type Verdict,
+  type Assessment, type Evidence, type Judge, type Lang, type Move, type Open, type SessionState, type Stage, type Task, type TaskKind, type TaskStatus, type Verdict,
 } from './state';
 
 export class ValidationError extends Error {
@@ -158,7 +158,26 @@ export function parseVerdict(x: unknown): Verdict {
   return { better: bool(v.better, 'verdict.better'), reason };
 }
 
-export interface Diagnosis { tasks: Task[]; briefing: string[] }
+export interface Diagnosis { tasks: Task[]; briefing: string[]; assessment: Assessment }
+
+const EVIDENCE: readonly Evidence[] = ['strong', 'weak', 'none'];
+const MAX_CLAIMS = 8;
+
+// 평가는 학생이 그대로 읽는다 — 글에 없는 문단을 가리키는 항목은 버린다
+function parseAssessment(x: unknown, paragraphCount: number): Assessment {
+  const a = obj(x, 'diagnosis.assessment');
+  if (!Array.isArray(a.claims)) fail('assessment.claims: 목록이 아니에요.');
+  const claims = a.claims.slice(0, MAX_CLAIMS).map((v, i) => {
+    const c = obj(v, `assessment.claims[${i}]`);
+    return {
+      paragraph: num(c.paragraph, 'claim.paragraph'),
+      claim: str(c.claim, 'claim.claim', 200).trim(),
+      evidence: oneOf(c.evidence, EVIDENCE, 'claim.evidence'),
+      note: str(c.note, 'claim.note', 300).trim(),
+    };
+  }).filter((c) => Number.isInteger(c.paragraph) && c.paragraph >= 1 && c.paragraph <= paragraphCount);
+  return { summary: str(a.summary, 'assessment.summary', 400).trim(), claims };
+}
 
 // 진단은 과제 정확히 3개 + 브리핑 3파트. 내용 과제가 앞에 오도록 코드가 다시 세운다
 export function parseDiagnosis(x: unknown, paragraphCount: number): Diagnosis {
@@ -185,7 +204,7 @@ export function parseDiagnosis(x: unknown, paragraphCount: number): Diagnosis {
     target: { paragraph: t.paragraph, keyword: t.keyword }, goal: t.goal, doneWhen: t.doneWhen, opener: t.opener,
     status: 'pending', fromExemplar: false, turns: 0, edits: 0, experience: [], nudged: false,
   }));
-  return { tasks, briefing };
+  return { tasks, briefing, assessment: parseAssessment(d.assessment, paragraphCount) };
 }
 
 export interface Summary { report: string; nextSteps: string[] }

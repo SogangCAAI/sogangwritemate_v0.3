@@ -150,6 +150,7 @@ export function Session({ start, onFinish }: { start: Start; onFinish: (s: Sessi
           listenPaused={editing && voice.held}
           onSave={saveEdit}
           onEditing={setEditing}
+          assessment={start.assessment}
         />
         <VoicePanel
           log={log}

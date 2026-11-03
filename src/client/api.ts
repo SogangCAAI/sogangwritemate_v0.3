@@ -1,10 +1,14 @@
 // 함수 호출 — 봉투 {ok, data, error}를 풀고, 실패는 사용자에게 보여 줄 문장으로 던진다
-import type { SessionState } from '../state';
+import type { Assessment, SessionState } from '../state';
 
 export interface TurnResult {
   state: SessionState;
   say: string | null;
   awaitPause: boolean;
+}
+
+export interface DiagnoseResult extends TurnResult {
+  assessment: Assessment;
 }
 
 export interface SummaryResult {

@@ -1,7 +1,7 @@
 // 시작 화면 — 글(필수)·공고(선택)·이력(선택)을 붙여 넣고 언어를 고른다 → 첫 진단
 import { useState, type FormEvent } from 'react';
-import type { Lang, SessionState } from '../state';
-import { errorText, post, type TurnResult } from './api';
+import type { Assessment, Lang, SessionState } from '../state';
+import { errorText, post, type DiagnoseResult } from './api';
 import { Masthead } from './Masthead';
 
 export interface Start {
@@ -10,6 +10,7 @@ export interface Start {
   awaitPause: boolean;
   posting: string;
   paragraphs: string[];
+  assessment: Assessment; // 첫 진단의 평가 — 세션·요약 화면이 보여 준다
 }
 
 const MAX_PARAGRAPHS = 20;
@@ -37,8 +38,8 @@ export function Landing({ onStart }: { onStart: (s: Start) => void }) {
     setBusy(true);
     setError('');
     try {
-      const r = await post<TurnResult>('/api/diagnose', { lang, posting: posting.trim(), paragraphs, resume: resume.trim() || undefined });
-      onStart({ state: r.state, say: r.say ?? '', awaitPause: r.awaitPause, posting: posting.trim(), paragraphs });
+      const r = await post<DiagnoseResult>('/api/diagnose', { lang, posting: posting.trim(), paragraphs, resume: resume.trim() || undefined });
+      onStart({ state: r.state, say: r.say ?? '', awaitPause: r.awaitPause, posting: posting.trim(), paragraphs, assessment: r.assessment });
     } catch (err) {
       setError(errorText(err));
       setBusy(false);
