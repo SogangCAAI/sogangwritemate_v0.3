@@ -5,6 +5,7 @@
 //   답이 틀리거나 못 짚음  → 모델이 어디가 비었는지 힌트 하나 + 다시 고쳐 보게 (A4.1), 과제는 active 그대로.
 //                            주장은 맞게 짚었으면(judge.criteria에 'claim') 기록해 두고, 다음 확인은 받침 문장만 묻는다 (EditingPhase)
 //   다시 고쳐 저장         → EditingPhase.onEdit가 재평가하고, 다 채우면 확인 질문을 다시 연다 (과제당 두 번까지)
+import { TURN } from '../../prompts';
 import type { Judge, Outcome } from '../../state';
 import { activeTask } from '../../state';
 import { Phase } from '../Phase';
@@ -35,7 +36,7 @@ export class CheckPhase extends Phase {
     const named = j.criteria.map((x) => x.trim().toLowerCase());
     const claimOk = t.check.claimOk || named.includes('claim');
     let s1 = Tasks.update(s, t.id, { check: { ...t.check, claimOk } });
-    if (claimOk && !t.check.claimOk) s1 = Tasks.note(s1, t.id, '확인 질문: 주장은 맞게 짚었다 — 받침 문장만 남았다');
+    if (claimOk && !t.check.claimOk) s1 = Tasks.note(s1, t.id, TURN[s.lang].note.claimOk);
     return { ...Say.model({ ...s1, open: null }, j, false), agentAction: 'A4.1' };
   }
 }

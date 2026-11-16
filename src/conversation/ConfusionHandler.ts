@@ -18,6 +18,7 @@
 // 마무리 중이면(성공 확인에 "잘 모르겠어요") 그 국면의 답으로 넘긴다.
 import { activeTask, type Judge, type Outcome, type SessionState } from '../state';
 import { lines } from '../lines';
+import { TURN } from '../prompts';
 import { Agenda } from './Agenda';
 import { PhaseFactory } from './PhaseFactory';
 import { Say } from './Say';
@@ -33,7 +34,7 @@ export class ConfusionHandler {
     if (!t) return { ...Say.model({ ...base, confusedStreak: 0 }, j, true), agentAction: 'clarify' };
     const n = this.s.confusedStreak + 1;
     // 두 번째부터는 "이 질문에는 답하지 못했다"를 기록해 같은 재료를 다시 묻지 않게 한다 (재료 바꾸기의 근거)
-    const s2 = n >= 2 && this.s.open ? Tasks.note(base, t.id, `학생이 답하지 못한 질문: ${this.s.open.firstPair}`) : base;
+    const s2 = n >= 2 && this.s.open ? Tasks.note(base, t.id, TURN[this.s.lang].note.unanswered(this.s.open.firstPair)) : base;
     if (n === 1) return { ...Say.model({ ...base, confusedStreak: 1 }, { ...j, opens: 'A5.1' }, false), agentAction: 'clue_up' };
     if (n === 2) return { ...Say.model({ ...s2, confusedStreak: 2 }, { ...j, opens: j.opens === 'A2.6' ? 'A2.6' : 'P1.4' }, false), agentAction: j.opens === 'A2.6' ? 'swap' : 'scaffold' };
     if (n === 3) return { ...Say.model({ ...s2, confusedStreak: 3 }, { ...j, opens: j.opens === 'A2.6' ? 'A2.6' : 'A5.0' }, false), agentAction: j.opens === 'A2.6' ? 'swap' : 'assemble' };

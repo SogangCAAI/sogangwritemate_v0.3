@@ -8,6 +8,7 @@ import {
 } from '../../../rubric';
 import { clip, fail, firstN, num, obj, oneOf, type Obj } from '../fields';
 import { KINDS } from '../RequestParser';
+import { DIAGNOSE } from '../../../prompts';
 
 const GRADE = { type: 'string', enum: [...RUBRIC_GRADES] };
 const JUDGEMENT = { type: 'object', properties: { grade: GRADE, evidence: { type: 'string' } }, required: ['grade', 'evidence'] };
@@ -101,13 +102,6 @@ export function parseRubric(x: unknown): Rubric {
 const isAxis = (x: unknown): x is RubricAxisKey => RUBRIC_AXIS_KEYS.includes(x as RubricAxisKey);
 
 const MAX_CRITERIA = 3;
-export const NO_CLICHE_TEXT = { ko: (p: number) => `${p}문단에 상투 표현이 없다`, en: (p: number) => `Paragraph ${p} has no stock phrases` };
-// 새로 보여 줘야 하는 것 — 모델이 needsNew 항목을 하나도 내지 않으면 코드가 넣는다 (문장 하나 바꿔 쓰기로는 통과하지 못하게, 2026-11-16)
-export const NEEDS_NEW_TEXT = {
-  ko: (p: number, kind: Task['kind']) => `${p}문단에 원래 없던 ${kind === 'content' ? '학생의 경험·사실' : '구체적 사실(무엇을·얼마나)'}이 들어간다`,
-  en: (p: number, kind: Task['kind']) => `Paragraph ${p} includes ${kind === 'content' ? "the student's experience or a fact" : 'a concrete fact (what, how much)'} that was not there before`,
-};
-
 interface RawCriterion { text: string; needsNew: boolean }
 const rawCriterion = (x: unknown): RawCriterion | null => {
   if (typeof x === 'string') return x.trim() ? { text: x.trim().slice(0, 200), needsNew: false } : null;
@@ -123,9 +117,9 @@ function criteriaOf(raw: unknown, doneWhen: string, kind: Task['kind'], paragrap
   const texts = (given.length ? given : [{ text: doneWhen, needsNew: false }]).slice(0, MAX_CRITERIA);
   const items: Criterion[] = texts.map((c, i) => ({ id: `c${i + 1}`, text: c.text, check: 'llm', source: 'diagnosis', met: false, ...(c.needsNew ? { needsNew: true } : {}) }));
   const para = paragraphs[paragraph - 1] ?? '';
-  if (kind === 'form' && findCliches([para]).length) items.push({ id: 'k1', text: NO_CLICHE_TEXT[lang](paragraph), check: 'noCliche', source: 'code', met: false });
+  if (kind === 'form' && findCliches([para]).length) items.push({ id: 'k1', text: DIAGNOSE.noClicheItem[lang](paragraph), check: 'noCliche', source: 'code', met: false });
   // 구조 과제(문장 이동·문단 삭제)는 새 내용을 요구하지 않는다 — 옮긴 문장은 원래 글에 있던 것이다
-  if (kind !== 'structure' && !items.some((c) => c.needsNew)) items.push({ id: 'n1', text: NEEDS_NEW_TEXT[lang](paragraph, kind), check: 'llm', source: 'code', met: false, needsNew: true });
+  if (kind !== 'structure' && !items.some((c) => c.needsNew)) items.push({ id: 'n1', text: DIAGNOSE.needsNewItem[lang](paragraph, kind), check: 'llm', source: 'code', met: false, needsNew: true });
   return items;
 }
 

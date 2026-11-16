@@ -102,7 +102,7 @@ SessionState
 과제 상태: `pending → active → done | skipped | timeout`. 시간 규칙: 과제 1에 집중(과제별 시간 제안 없음), 과제를 끝냈을 때 남은 시간이 7분 이상일 때만 다음 과제, 남은 3분이면 **제안 없이** 마무리 시작, 0분이면 요약 화면 (FLOW.md '시간 규칙').
 
 첫 진단의 **평가**는 v2와 같은 채점 루브릭이다 (`src/rubric.ts`, 교수님 부록 B): 5축 `claim · hierarchy · alignment · cohesion · expression` 각각 `{grade: 하|중|상|판정불가, evidence}`, 정합성만 하위 둘 `transfer`(지원 업무와의 연결) · `consistency`(제공 자료와의 사실 일치)를 따로 내고 축 등급은 **판정할 수 있었던 하위 중 가장 나쁜 것**이다. 여기에 `strengths`(잘한 점) 한두 문장.
-- 프롬프트(`src/prompts/diagnose.md`)의 루브릭 기술어·판정 규칙은 v2 `prompts.ts`를 글자 그대로 옮겼다 (위계와 예증은 `experience_flow` 꺼진 갈래 = v2 기본). 정합성 안내는 공고나 이력이 있으면/없으면 두 갈래 (`Diagnoser`).
+- 프롬프트(`src/prompts.ts` 2장)의 루브릭 기술어·판정 규칙은 v2 `prompts.ts`를 글자 그대로 옮겼다 (위계와 예증은 `experience_flow` 꺼진 갈래 = v2 기본). 정합성 안내는 공고나 이력이 있으면/없으면 두 갈래 (`Diagnoser`).
 - 파서는 진단을 실패시키지 않는다: 모양이 틀리거나 모르는 등급인 축은 그 축만 `판정불가`, 근거·잘한 점은 400자에서 자른다.
 - 과제마다 모델이 `axis`를 적고, 코드가 v2 `decideTargetStage` 규칙으로 순서를 다시 세운다 — 하 → 중 → 상, 같은 등급이면 축 순서.
 - 루브릭은 화면만 들고 있다 (응답 `{state, say, awaitPause, rubric, strengths}`). 턴마다 오가는 상태에는 넣지 않고, DB에는 `sessions.rubric`으로 남긴다.
@@ -168,7 +168,7 @@ v2와 다른 점: 중요도를 한 턴 늦게(배경 호출) 받지 않고 같�
 - 화면: 글 패널에서 문단을 더하거나(빈 문단, 바로 열림) 비운 문단을 지울 수 있다 (`SessionController.insertParagraph/deleteParagraph`). 과제·화제의 문단 번호를 함께 민다. 처음 글은 `origin`으로 지금 번호에 맞춰 재평가에 보낸다.
 - 예전 상태(항목 없음)는 `doneWhen` 한 문장을 항목 하나로 본다 — 깨지지 않는다.
 - 화면: 글 패널의 "완료 항목 n/m" 체크리스트, 과제 띠의 진행도, 요약 표의 항목 ✓/○.
-- 5축 루브릭은 요약 화면에서만 다시 쓴다: `/api/summary`가 끝 글을 처음과 같은 `rubric.md`로 재진단해 처음/끝 카드를 나란히 보인다 (`Diagnoser.regrade`, `sessions.final_rubric`). 재진단이 실패해도 요약은 돌려준다.
+- 5축 루브릭은 요약 화면에서만 다시 쓴다: `/api/summary`가 끝 글을 처음과 같은 루브릭(`prompts.ts` DIAGNOSE.rubric)으로 재진단해 처음/끝 카드를 나란히 보인다 (`Diagnoser.regrade`, `sessions.final_rubric`). 재진단이 실패해도 요약은 돌려준다.
 
 ## 7. LLM 호출 (`src/server/llm/LlmClient.ts`)
 
@@ -240,13 +240,14 @@ sogang-tutor-v3/
 │  │  ├─ handlers/      DiagnoseHandler · TurnHandler · EvaluateHandler · SummaryHandler · TtsHandler
 │  │  ├─ http/Handler.ts      바탕 클래스: 오류 → 봉투 {ok, data, error}
 │  │  ├─ services/      TurnResponder(턴 + tidy) · Diagnoser · Evaluator · Summarizer · TtsService
-│  │  ├─ llm/           LlmClient(구조화된 출력) · PromptBook(.md 읽기·채우기) · TurnPrompt
+│  │  ├─ llm/           LlmClient(구조화된 출력) · TurnPrompt(prompts.ts 1장에 사실을 채우는 조립 — 글 없음)
 │  │  ├─ parse/         RequestParser(요청·상태) · LlmOutputParser + outputs/(스키마 + 파서) · fields(작은 검사, ValidationError)
 │  │  ├─ store/SessionStore.ts   Supabase 저장 (없으면 건너뜀)
 │  │  └─ deps.ts        부품 한 벌 조립
-│  ├─ prompts/          tutor.ko/en · diagnose · evaluate · summary (.md)
+│  ├─ prompts.ts        **모델이 읽는 글과 코드가 말하는 문장 전부** — 0 공통 · 1 턴 · 2 진단(루브릭) · 3 재평가 · 4 요약 · 5 코드가 말하는 줄. 맨 위에 고치는 법·목차
+│  ├─ lines.ts          prompts.ts 5장의 재수출 + 마무리 파트 조립
 │  └─ client/           화면 (8절)
-├─ tests/               decide 표 테스트(대본 목업) · conversation(국면) · ca(막힘·다른 요청·끼어들기) · sessionController · checks · handlers · validate (node:test)
+├─ tests/               decide 표 테스트(대본 목업) · conversation(국면) · ca(막힘·다른 요청·끼어들기) · criteria · prompts(스냅샷: snapshots/prompts.md) · sessionController · checks · handlers · validate (node:test)
 ├─ experiments/         판정 정확도 · 판정+응답 · 골드 29발화 · 실제 API 연기 시험
 ├─ supabase/schema.sql · migrations/
 ├─ PRODUCT.md · DESIGN.md · ARCHITECTURE.md · FLOW.md

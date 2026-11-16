@@ -10,7 +10,6 @@ import { RequestParser } from '../src/server/parse/RequestParser';
 import { criteriaProgress, type Criterion, type SessionState, type Verdict } from '../src/state';
 import { TutoringSession } from '../src/conversation/TutoringSession';
 import { TurnPrompt } from '../src/server/llm/TurnPrompt';
-import { PromptBook } from '../src/server/llm/PromptBook';
 import { parseDiagnosis } from '../src/server/parse/LlmOutputParser';
 import { crit, fresh, j, T0, TASKS } from './fixture';
 
@@ -143,7 +142,7 @@ test('이미 정해진 것 기록: 결론 확정 · 두 번째 막힘의 질문 
   assert.equal(once.tasks[0]!.notes.length, 1);
   const twice = next({ ...once, open: asked.open }, j('CONFUSED'), { kind: 'say', text: '기억이 안 난다고요', now: T0 }).state;
   assert.ok(twice.tasks[0]!.notes.includes('학생이 답하지 못한 질문: 세미나에서 어떤 수학 기초였어요?'));
-  const p = new TurnPrompt(new PromptBook());
+  const p = new TurnPrompt();
   const sys = p.system(twice, { posting: '', paragraphs: ['a', 'b', 'c'], resume: 'TOEIC 985 · 과외' });
   assert.ok(sys.includes('이미 정해진 것') && sys.includes('답하지 못한 질문: 세미나') && sys.includes('TOEIC 985'));
 });
@@ -155,7 +154,7 @@ test('막힘 2·3회에 모델이 재료 바꾸기로 A2.6을 열면 그대로 �
 });
 
 test('형식 과제도 결론이 확정되면 다음 칸은 고치기(edit)다 — 합의를 되풀이하지 않는다', () => {
-  const p = new TurnPrompt(new PromptBook());
+  const p = new TurnPrompt();
   const ctx = { posting: '', paragraphs: ['a', 'b', 'c'], resume: '' };
   const form = Tasks.update({ ...t1Active(), open: null }, 't1', { kind: 'form' });
   assert.ok(p.system(form, ctx).includes('형식 과제다 — 고치기 전에 계획을 합의한다'));

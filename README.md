@@ -41,17 +41,17 @@ Netlify: 진단(Sonnet)이 10초를 넘을 수 있어 함수 시간 제한을 26
 | `src/state.ts` | SessionState · Task · Judge · 이벤트 타입, 시간 예산 상수 |
 | `src/conversation/` | 대화 흐름 — `TutoringSession` + 국면 클래스(State 패턴): 15 라벨 · B4.4 · UNCLEAR 1/2/3 · 막힘·다른 요청 · 과제 전환 · 시간 규칙 · 마무리. 지도: `FLOW.md` |
 | `src/decide.ts` | 예전 입구 `next()` — `TutoringSession`에 위임 (테스트·실험용) |
-| `src/lines.ts` | 코드가 직접 말하는 문장(ko/en) · 마무리 파트(과제 표에서만) |
+| **`src/prompts.ts`** | **모델이 읽는 글과 코드가 말하는 문장 전부 한 파일** (v2 `prompts.ts`와 같은 자리) — 0 공통 · 1 턴(ko/en · 다음 칸 · 덧붙임 줄 · 기록 문장) · 2 진단·재진단·루브릭 · 3 재평가 · 4 요약 · 5 코드가 말하는 줄. 맨 위에 고치는 법·목차·짝 표시. 고친 뒤 `npm test -- tests/prompts.test.ts`가 무엇이 바뀌었는지 보여 준다 (`tests/snapshots/prompts.md`) |
+| `src/lines.ts` | `prompts.ts` 5장 재수출 · 마무리 파트(과제 표에서만) |
 | `src/checks.ts` | 문장 상한 · 답 뒤 질문 떼기 · 인용 검사 · 시간 · 상투 표현 사전(v2 이식) |
 | `src/server/handlers/` | 함수 본문 클래스 (Diagnose · Turn · Evaluate · Summary · Tts) |
 | `src/server/services/` | `TurnResponder`(Haiku 한 번 + 길이 검사) · `Diagnoser`(첫 진단 · 끝 재진단) · `Evaluator`(완료 항목 판정) · `Summarizer` · `TtsService` |
-| `src/server/llm/` | `LlmClient`(구조화된 출력, 시간 제한, 사용자용 오류) · `PromptBook` · `TurnPrompt` |
+| `src/server/llm/` | `LlmClient`(구조화된 출력, 시간 제한, 사용자용 오류) · `TurnPrompt`(1장의 글에 사실을 채우는 조립) |
 | `src/server/parse/` | `RequestParser`(요청 본문·클라이언트 상태) · `LlmOutputParser`(모델 출력, 스키마는 `outputs/`) |
 | `src/server/store/` · `src/server/http/` | Supabase 저장(없으면 생략) · 응답 봉투 `{ok, data, error}` |
-| `src/prompts/*.md` | tutor.ko/en · diagnose · rubric(진단·재진단 공용) · regrade · evaluate · summary |
 | `netlify/functions/` | `diagnose` (Sonnet) · `turn` (Haiku) · `evaluate` (Haiku) · `summary` (Sonnet) |
 | `src/client/` | Landing · Session(대화·칩·글 패널·과제 목록) · Summary(과제 표·처음/끝 글) · `SessionController` · `voice/`(TutorSpeaker · BargeInDetector · SpeechListener) |
-| `tests/` | `decide.test.ts` 목업 표 테스트 · `conversation.test.ts` 국면 · `criteria.test.ts` 완료 항목 · `ca.test.ts` · `sessionController.test.ts` · `checks` · `handlers` · `validate` |
+| `tests/` | `decide.test.ts` 목업 표 테스트 · `conversation.test.ts` 국면 · `criteria.test.ts` 완료 항목 · `prompts.test.ts` 프롬프트 스냅샷 · `ca.test.ts` · `sessionController.test.ts` · `checks` · `handlers` · `validate` |
 | `experiments/gold_eval.mjs` | 골드 29개를 v3 턴 경로로, 라벨이 아니라 `next()` 결과로 채점 |
 
 ## 다음 단계

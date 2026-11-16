@@ -4,6 +4,7 @@
 //   수락 → 결론(firstPair)을 과제 evidence로 기록하고, 합의한 내용이 과제의 완료 항목(criteria)이 된다 — 진단의 초안을 대신한다.
 //          아직 done은 아니다 (글이 바뀌어야 한다 — 이해는 주장이 아니라 시연, NCF p.18–19) → EditingPhase
 //   거절·정정 → 기본값: 모델이 고친 해석으로 다시 A2.6을 연다 (과제는 그대로)
+import { TURN } from '../../prompts';
 import type { Judge, Outcome } from '../../state';
 import { activeTask } from '../../state';
 import { Agenda } from '../Agenda';
@@ -17,7 +18,7 @@ export class ConclusionPhase extends Phase {
   override onAccept(j: Judge, now: number): Outcome {
     const s = { ...this.s, repaired: false };
     const t = activeTask(s);
-    const s1 = t ? Tasks.note(Tasks.confirmCriteria(s, t.id, s.open?.criteria ?? [], s.open!.firstPair), t.id, `결론 확정: ${s.open!.firstPair}`) : s;
+    const s1 = t ? Tasks.note(Tasks.confirmCriteria(s, t.id, s.open?.criteria ?? [], s.open!.firstPair), t.id, TURN[s.lang].note.conclusion(s.open!.firstPair)) : s;
     return Agenda.nudge(Say.model({ ...s1, open: null }, j, false), now);
   }
 }
