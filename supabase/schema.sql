@@ -7,9 +7,10 @@ create table if not exists sessions (
   posting      text not null default '',
   essay        jsonb not null,            -- 처음 글 (문단 배열)
   final_essay  jsonb,                     -- 끝 글
-  tasks        jsonb not null,            -- 과제 3개 (상태·시간·턴·수정 횟수·근거)
+  tasks        jsonb not null,            -- 과제 3개 (상태·시간·턴·수정 횟수·근거·완료 항목 criteria)
   summary      jsonb,                     -- {report, nextSteps}
   rubric       jsonb,                     -- 첫 진단 {rubric: 5축 {grade, evidence}, strengths} (부록 B 루브릭)
+  final_rubric jsonb,                     -- 끝 재진단 (같은 루브릭으로 끝 글을 다시) — 실패하면 null
   helped       boolean,                   -- 마무리 성공 확인 (C4.6)
   created_at   timestamptz not null default now(),
   ended_at     timestamptz
@@ -21,7 +22,7 @@ create table if not exists turns (
   kind          text not null check (kind in ('say', 'pause', 'edit')),
   user_text     text,
   agent_text    text,
-  user_action   text,                     -- judge.move (13 라벨)
+  user_action   text,                     -- judge.move (15 라벨)
   agent_action  text not null,            -- B2.1 · A3 · P1 · B4.4 · done:eval …
   apr           text,                     -- 시퀀스 안의 자리: B2PP · repair · insert · post …
   judge         jsonb,                    -- 판정 전체 또는 재평가 결과
@@ -35,4 +36,4 @@ create index if not exists turns_session_idx on turns (session_id, created_at);
 alter table sessions enable row level security;
 alter table turns enable row level security;
 
--- 이미 만든 DB에 더할 때: supabase/migrations/20261103010000_rubric.sql
+-- 이미 만든 DB에 더할 때: supabase/migrations/ 의 파일을 차례로 (20261103010000_rubric.sql · 20261116010000_final_rubric.sql)

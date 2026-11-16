@@ -1,9 +1,11 @@
 // 첫 진단 — Sonnet 한 번이 채점 루브릭(5축) · 과제 3개 · 브리핑 3파트를 낸다
+// 끝 재진단(regrade) — 세션이 끝난 뒤 끝 글을 같은 루브릭으로 다시 매긴다 (요약 화면의 처음/끝 비교, 2026-11-16)
+// 루브릭 본문은 src/prompts/rubric.md 하나다 — 두 프롬프트가 같은 글자를 쓴다
 import { findCliches } from '../../checks';
 import type { Lang } from '../../state';
 import { LlmClient, MODELS } from '../llm/LlmClient';
 import { PromptBook } from '../llm/PromptBook';
-import { DIAGNOSE_TOOL, LlmOutputParser, type Diagnosis } from '../parse/LlmOutputParser';
+import { DIAGNOSE_TOOL, LlmOutputParser, REGRADE_TOOL, type Diagnosis, type Regrade } from '../parse/LlmOutputParser';
 import type { Context } from '../parse/RequestParser';
 
 // 축 3(정합성) 판정 안내 — v2 prompts.ts의 hasAlignmentSources 두 갈래 그대로 (이력서나 공고가 있나)
@@ -16,16 +18,32 @@ export class Diagnoser {
   constructor(private readonly llm: LlmClient, private readonly prompts: PromptBook) {}
 
   async diagnose(ctx: Context, lang: Lang, resume: string): Promise<Diagnosis> {
-    const hits = findCliches(ctx.paragraphs);
     const raw = await this.llm.call({
       model: MODELS.diagnose, maxTokens: 3000, tool: DIAGNOSE_TOOL,
       system: 'You plan a 20-minute cover-letter tutoring session.',
-      user: this.prompts.render('diagnose.md', {
-        lang: PromptBook.langName(lang), posting: PromptBook.postingText(ctx.posting), essay: PromptBook.essayText(ctx.paragraphs), resume,
-        alignmentNote: ctx.posting || resume ? ALIGNMENT_NOTE.withSources : ALIGNMENT_NOTE.noSources,
-        cliches: hits.map((h) => `${h.paragraph}문단 "${h.text}" (${h.label})`).join('\n') || '-',
-      }),
+      user: this.prompts.render('diagnose.md', this.vars(ctx, lang, resume)),
     });
-    return LlmOutputParser.diagnosis(raw, ctx.paragraphs.length);
+    return LlmOutputParser.diagnosis(raw, ctx.paragraphs, lang);
+  }
+
+  // 끝 글만 다시 매긴다 — 과제·브리핑 없음. 처음 글은 주지 않아 비교가 아니라 같은 잣대의 독립 판정이 되게 한다
+  async regrade(ctx: Context, lang: Lang, resume: string): Promise<Regrade> {
+    const raw = await this.llm.call({
+      model: MODELS.diagnose, maxTokens: 2000, tool: REGRADE_TOOL,
+      system: 'You grade a revised cover letter with the same rubric used before the session.',
+      user: this.prompts.render('regrade.md', this.vars(ctx, lang, resume)),
+    });
+    return LlmOutputParser.regrade(raw);
+  }
+
+  // 두 프롬프트가 같이 쓰는 칸 — 루브릭(rubric.md)은 정합성 안내까지 채워서 넣는다
+  private vars(ctx: Context, lang: Lang, resume: string): Record<string, string> {
+    const hits = findCliches(ctx.paragraphs);
+    const alignmentNote = ctx.posting || resume ? ALIGNMENT_NOTE.withSources : ALIGNMENT_NOTE.noSources;
+    return {
+      lang: PromptBook.langName(lang), posting: PromptBook.postingText(ctx.posting), essay: PromptBook.essayText(ctx.paragraphs), resume,
+      rubric: PromptBook.fill(this.prompts.load('rubric.md'), { alignmentNote }),
+      cliches: hits.map((h) => `${h.paragraph}문단 "${h.text}" (${h.label})`).join('\n') || '-',
+    };
   }
 }

@@ -4,6 +4,7 @@
 import { activeTask, type SessionState } from '../state';
 import type { Phase } from './Phase';
 import { BriefingPhase } from './phases/BriefingPhase';
+import { CheckPhase } from './phases/CheckPhase';
 import { ClosingPhase } from './phases/ClosingPhase';
 import { ConclusionPhase } from './phases/ConclusionPhase';
 import { EditingPhase } from './phases/EditingPhase';
@@ -21,6 +22,7 @@ export class PhaseFactory {
     if (s.open?.effect) return new TaskProposalPhase(s); // 과제 시작 · 넘어가기 · 마무리 제안
     if (p === 'A5.1' || p === 'A5.5' || p === 'A5.0') return new ExperiencePhase(s);
     if (p === 'A2.6') return new ConclusionPhase(s);
+    if (p === 'A4' && activeTask(s)) return new CheckPhase(s); // 항목을 다 채운 뒤의 확인 질문
     if (activeTask(s)) return new EditingPhase(s); // 과제 중, 열린 짝이 없거나 P1·P1.4
     return new IdlePhase(s); // 과제 사이
   }

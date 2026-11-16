@@ -8,6 +8,7 @@ export interface Start {
   say: string;
   awaitPause: boolean;
   posting: string;
+  resume: string; // 이력·경험 메모 (선택) — 끝 재진단의 정합성 판정에도 쓴다
   paragraphs: readonly string[];
   rubric: Rubric; // 첫 진단의 채점 루브릭 — 세션·요약 화면이 보여 준다
   strengths: string;

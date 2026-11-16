@@ -1,6 +1,6 @@
 # 서강 글벗 v3 — 아키텍처
 
-갱신 2026-11-03 · 대상 커밋: `main` · 대화 흐름 지도: `FLOW.md` · 설계 근거: `제안 - v3 새로 짜기 (ponytail).md` · `제안 - NCF 패턴으로 대화 설계.md` · `대본 목업 - NCF 패턴 1차.md`
+갱신 2026-11-16 · 대상 커밋: `main` · 대화 흐름 지도: `FLOW.md` · 설계 근거: `제안 - v3 새로 짜기 (ponytail).md` · `제안 - NCF 패턴으로 대화 설계.md` · `대본 목업 - NCF 패턴 1차.md`
 
 ---
 
@@ -13,7 +13,7 @@
 
 1. **판단은 모델이 한 번에, 결정은 코드 한 곳에서.** 한 턴에 LLM은 1회(Haiku)만 부르고, 그 판정으로 상태를 옮기는 일은 `src/conversation/`의 `TutoringSession`(국면 클래스, State 패턴)이 한다. 받은 상태를 바꾸지 않고 새 상태를 돌려준다.
 2. **대화는 NCF 패턴.** 상태를 옮기는 것은 기본 짝의 둘째 짝(학생의 답)뿐이고, 되묻기·확인·인정은 상태를 바꾸지 않는다 (Moore & Arar 2019).
-3. **완료는 글이 실제로 나아졌을 때.** 학생이 대상 문단을 고치고, 재평가가 "원래보다 낫다"고 하면(또는 시범 문장을 받아들이면) 과제가 끝난다.
+3. **완료는 글이 실제로 나아졌을 때 — 체크리스트로.** 과제마다 "고친 문단에 보이나"로 판정할 수 있는 완료 항목 2–3개가 있다. 내용 과제의 항목은 결론 확인(A2.6)에서 학생과 합의한 내용으로 확정되고, 학생이 문단을 고치면 항목마다 절대 판정해 전부 충족일 때(또는 시범 문장을 받아들이면) 과제가 끝난다. 5축 루브릭은 글 전체의 잣대라 과제 판정에는 쓰지 않고, 세션 처음과 끝에 글 전체를 매기는 데만 쓴다 (2026-11-16).
 
 ```
 ┌──────────────────────── 브라우저 (React + Vite) ────────────────────────┐
@@ -40,9 +40,9 @@
 | 브리핑 | 코드 | 인사 → 브리핑 파트 1·2·3 (학생의 쉼이나 맞장구로 다음 파트) → 과제 1 시작 제안 | 0 |
 | 과제 진행 | `/api/turn` | 학생 발화 판정 + 튜터의 다음 말 | Haiku 1회/턴 |
 | 과제 수락 | 코드 | 진단이 만든 첫 질문(`opener`)을 바로 말함 | 0 |
-| 문단 수정 | `/api/evaluate` | 고친 문단이 완료 기준을 원래보다 더 채우나 | Haiku 1회 (시범 문장 그대로면 0) |
+| 문단 수정 | `/api/evaluate` | 완료 항목마다 고친 문단에 보이나 — 코드 항목(상투 표현)은 코드가, 나머지는 Haiku가 | Haiku 1회 (시범 문장 그대로·코드 항목만이면 0) |
 | 마무리 | 코드 | 과제 표에서 만든 요약 파트 → 성공 확인 → 작별 | 0 |
-| 요약 화면 | `/api/summary` | 튜터의 정리 + 다음에 할 것 | Sonnet 1회 |
+| 요약 화면 | `/api/summary` | 튜터의 정리 + 다음에 할 것 · 끝 글을 처음과 같은 루브릭으로 재진단 | Sonnet 2회 (나란히) |
 
 ## 3. 한 턴의 흐름 (`/api/turn`)
 
@@ -59,7 +59,7 @@ sequenceDiagram
     T->>D: 칩 라벨로 판정 (LLM 없음)
   else 말·글자
     T->>H: 시스템 프롬프트(지금 패턴·과제·다음 칸·막힘/다른 요청 횟수·끼어들기) + 최근 대화
-    H-->>T: {move, reply, paraphrase, example, opens, exemplar, positive, importance, targetParagraph}
+    H-->>T: {move, reply, paraphrase, example, opens, positive, importance, targetParagraph, criteria}
     T->>T: TurnResponder.tidy (2문장 상한, 자주 끼어들면 1문장 · 학생 질문에 답한 턴의 끝 질문 떼기)
   end
   T->>D: from(state).handle(judge, event) → 국면.onX
@@ -78,15 +78,20 @@ sequenceDiagram
 SessionState
 ├─ stage      opening → briefing → content / form → closing → ended
 ├─ open       지금 열린 첫째 짝 = NCF의 previous_node
-│             { pattern: A3 | A5.0 | A5.1 | A5.5 | A2.6 | P1 | P1.4 | C4 …, firstPair, parts?, effect?, taskId? }
+│             { pattern: A3 | A5.0 | A5.1 | A5.5 | A2.6 | P1 | P1.4 | A4 | C4 …, firstPair, parts?, effect?, taskId?, criteria? }
+│             P1.4 = 쓰는 법 보여 주기(뼈대) · A4 = 완료 직전 확인 질문 (코드만 연다)
+│             criteria = A2.6을 열 때 모델이 함께 낸 완료 항목 후보 — 학생이 받으면 과제의 체크리스트가 된다
 ├─ topic      지금 다루는 키워드·문단 ("그건 어디 넣어요?"의 '그건')
 ├─ last       { played, paraphrase, example } — 수리 요청에 LLM 없이 답할 재료
 ├─ repaired   수리·학생 질문 직후인가 (이때의 "고마워요"는 곁가지만 닫는다, B4.4)
 ├─ unclearStreak  못 알아들은 횟수 (1: 다시 말해 줄래요? · 2: 예시와 함께 · 3: 다른 과제 제안)
-├─ confusedStreak 학생이 연달아 "모르겠어요"(CONFUSED)라고 한 횟수 (1: 단서 · 2: 시범 · 3: 과제 미루고 다음) — 다른 수면 0, 수리는 건너뜀
+├─ confusedStreak 학생이 연달아 "모르겠어요"(CONFUSED)라고 한 횟수 (1: 단서 · 2: 뼈대 · 3: 자리 불러 주기 · 4: 과제 미루고 다음) — 다른 수면 0, 수리는 건너뜀
 ├─ offGoalCount   학생이 지금 과제 밖의 것을 하자고 한 횟수 (세션 누적, 0: 겹쳐 받기 · 1+: 학생을 따른다)
-├─ tasks[3]   { kind: content|form, target, goal, doneWhen, opener, status, evidence, fromExemplar,
-│               startedAt, endedAt, turns, edits, experience[], exemplar, nudged }
+├─ tasks[3]   { kind: content|form, axis, target, goal, doneWhen, criteria[], opener, status, evidence, fromExemplar,
+│               startedAt, endedAt, turns, edits, experience[], nudged }
+│             criteria = 완료 항목 { id, text, check: llm|noCliche, source: diagnosis|conclusion|code, met, needsNew? }
+│             needsNew = 원래 문단에 없던 정보를 요구하는 항목 — 과제마다 최소 하나 (모델이 안 내면 코드가 n1을 넣는다)
+│             doneWhen은 항목의 한 문장 요약(화면·프롬프트용), 판정은 criteria로
 └─ startedAt · helped · closeOffered
 ```
 
@@ -104,13 +109,13 @@ SessionState
 |---|---|---|
 | ANSWER · CONTINUER | 답 · 맞장구 | 열린 패턴의 다음 칸 · 브리핑 다음 파트 / 경험 이어 붙임 |
 | ACCEPT · REJECT | 제안·결론 수락 · 거절·정정 | 과제 시작/결론 확인 · 다른 후보로 (재설득 없음) |
-| EXEMPLAR_REQ | 써 달라 | 시범 한 문장 (대필 금지) |
+| EXEMPLAR_REQ | 써 달라 | 문장을 써 주지 않는다 — 쓰는 법을 보여 준다: 틀 + 다른 사람의 예 + 학생 재료의 자리 (P1.4 뼈대, 2026-11-16) |
 | REPEAT_REQ · PARAPHRASE_REQ · EXAMPLE_REQ | 되묻기 | `last`에서 코드가 답 (상태 그대로) |
 | USER_INQUIRY | 학생의 질문 | 답하고 원래 시퀀스 유지 |
 | CLOSER | 인정·감사 | 시퀀스 닫기 (수리 직후면 곁가지만) |
 | ABORT · PRE_CLOSING | 그만 · 끝내자 | 과제 skipped · 마무리(요약 먼저) |
 | UNCLEAR | 못 알아들음 (튜터가 학생 말을 모름) | 단계적 되묻기 |
-| CONFUSED | 학생이 모르겠다·생각이 안 난다 ("잘 모르겠어요", "이해가 안 돼요") | 막힘 사다리 (`ConfusionHandler`): 1회 단서+같은 질문 · 2회 시범 한 문장 · 3회 과제 미루고 다음 |
+| CONFUSED | 학생이 모르겠다·생각이 안 난다 ("잘 모르겠어요", "이해가 안 돼요") | 막힘 사다리 (`ConfusionHandler`): 1회 단서+같은 질문 · 2회 뼈대(틀·다른 예·재료의 자리) · 3회 자리를 하나씩 불러 주기 · 4회 과제 미루고 다음 |
 | OFF_GOAL | 지금 과제 말고 다른 것을 먼저 ("3문단 먼저 볼래요") — `importance`·`targetParagraph`를 함께 냄 | `OffGoalHandler`: 첫 요청 겹쳐 받기(lower면 양보+그러나+이유) · higher이거나 거듭 청하면 그 문단의 남은 과제로 바꿈 · 맞는 과제가 없으면 학생 요청에 답함 |
 
 판정 정확도(지어낸 대본 29발화, 다음 행동 기준): 약 90% — `experiments/` 참고 (2026-11-03, 15라벨 두 번: 라벨 25–26/29 · 다음 행동 27/29 — 13라벨 때 같은 날 24/29 · 25/29).
@@ -127,16 +132,33 @@ v2(`pre-dashboard_code/`)의 CA 판정기는 층1 코드 판정 + 층2 배경 �
 
 v2와 다른 점: 중요도를 한 턴 늦게(배경 호출) 받지 않고 같은 턴에 정한다 · 학생이 집은 '자리'는 과제 문단 번호로만 맞춘다 · 막힘 횟수는 새 과제를 시작하면 0 · 끼어들기가 잦아도 시범 턴은 2문장(받음 + 시범 문장)까지 둔다.
 
-## 6. 과제 완료 판정 (`/api/evaluate`)
+## 6. 과제 완료 판정 (`/api/evaluate`) — 체크리스트 (2026-11-16)
+
+과제 완료는 **5축 루브릭이 아니라 과제별 완료 항목(criteria)** 으로 판정한다. 루브릭 기술어는 글 전체를 보는 말("첫 문단으로 본문을 예측할 수 있다")이라 문단 하나의 판정에 맞지 않았고, 예전의 "원래보다 더 충족하나"는 상대·이진 판정이라 조금만 고쳐도 통과했다.
 
 ```
-학생이 대상 문단 저장 ─▶ 시범 문장을 그대로 넣었나? ── 예 ─▶ done (재평가 없음, fromExemplar)
-                              │ 아니오
-                              ▼
-               Haiku: "고친 문단이 doneWhen을 원래보다 더 채우나?" → {better, reason}
-                              ├ better  → done, 튜터가 reason으로 칭찬 한 문장
-                              └ !better → active 유지, 튜터가 reason으로 힌트 한 문장
+첫 진단(Sonnet)   과제 단위는 문단(문장 하나를 과제로 잡지 않는다). 과제마다 criteria 초안 2–3개 {text, needsNew} + doneWhen 요약
+                  needsNew = 원래 문단에 없던 정보를 요구하는 항목 — 최소 하나. 모델이 안 내면 코드가 n1("원래 없던 경험·사실이 들어간다")을 넣는다
+                  form 과제의 문단에 상투 표현이 있으면 코드가 noCliche 항목을 더한다
+결론 확인(A2.6)   내용 과제: 경험을 듣고 해석을 제시할 때 · 형식 과제: 무엇을 주장하고 무엇으로 받칠지 학생이 말한 뒤 —
+                  모델이 criteria 후보를 낸다(judge.criteria) → 학생이 ACCEPT하면 합의한 항목이 진단 초안을 대신한다 (내용 과제의 합의 항목은 needsNew).
+                  코드 항목은 남는다 (Tasks.confirmCriteria)
+학생이 문단 저장 ─▶ 코드 항목 먼저: noCliche = findCliches(고친 문단) 비었나 (checks.codeCheck)
+                   llm 항목이 있으면 Haiku 1회: 항목 id마다 {met, evidence 인용} — "고친 문단에 보이나" (절대 판정)
+                   needsNew 항목은 인용이 비었거나 원래 문단에 이미 있는 글자면 '아직' (Evaluator.combine — 문장 바꿔 쓰기로는 통과 못 함)
+                   연결(cohesion)·주장(claim) 축 과제면 지금 글 전체를 참고로 함께 준다 (판정 대상은 그 문단 하나)
+                         ▼
+          전부 met → 아직 done 아님. "항목은 다 들어갔어요." + 확인 질문 (A4.0, CheckPhase):
+                     "지금 N문단이 하고 싶은 말이 뭐고, 어느 문장이 그걸 받쳐 주죠?"
+                     학생이 맞게 짚으면(positive) done · 못 짚으면 힌트 하나(A4.1), 다시 고치기
+          아니면  → active 유지, 항목 ✓/✗ 갱신(Tasks.applyVerdict), reason = 못 채운 항목 하나의 힌트 (A4.1, P1을 연다)
+시범 문장 지름길(그대로 넣으면 done)은 없앴다 — 튜터는 문장을 써 주지 않는다 (교사 원칙, 2026-11-16)
 ```
+
+- 모델이 빠뜨린 항목은 '아직'으로 본다. 코드 항목만 있는 과제는 모델을 부르지 않고 힌트도 코드가 쓴다 (`lines.codeHint`).
+- 예전 상태(항목 없음)는 `doneWhen` 한 문장을 항목 하나로 본다 — 깨지지 않는다.
+- 화면: 글 패널의 "완료 항목 n/m" 체크리스트, 과제 띠의 진행도, 요약 표의 항목 ✓/○.
+- 5축 루브릭은 요약 화면에서만 다시 쓴다: `/api/summary`가 끝 글을 처음과 같은 `rubric.md`로 재진단해 처음/끝 카드를 나란히 보인다 (`Diagnoser.regrade`, `sessions.final_rubric`). 재진단이 실패해도 요약은 돌려준다.
 
 ## 7. LLM 호출 (`src/server/llm/LlmClient.ts`)
 
@@ -144,8 +166,9 @@ v2와 다른 점: 중요도를 한 턴 늦게(배경 호출) 받지 않고 같�
 |---|---|---|---|---|
 | 진단 | `claude-sonnet-5-5` | medium | 22초 | 루브릭 5축 · 잘한 점 · 과제 3개 · 브리핑 |
 | 턴 | `claude-haiku-5-5` | low | 12초 | 판정 + 튜터 말 |
-| 재평가 | `claude-haiku-5-5` | low | 12초 | {better, reason} |
+| 재평가 | `claude-haiku-5-5` | low | 12초 | {items[{id, met, evidence}], reason} — 코드 항목만이면 호출 없음 |
 | 요약 | `claude-sonnet-5-5` | medium | 22초 | {report, nextSteps} |
+| 끝 재진단 | `claude-sonnet-5-5` | medium | 22초 | 루브릭 5축 · 잘한 점 (요약과 나란히 호출) |
 | 튜터 목소리 | Google TTS `Chirp3-HD` (ko Autonoe · en Aoede) | — | 8초 | MP3 (`/api/tts`) |
 
 - 모두 **구조화된 출력**(`output_config.format` json_schema)으로 받는다. Sonnet 5.5는 강제 `tool_choice`를 받지 않기 때문이다. 스키마는 보내기 전에 `additionalProperties:false`로 닫고 지원 안 되는 `minItems/maxItems`를 뺀다 — 개수는 출력 파서(`src/server/parse/outputs/`)가 응답 뒤에 맞춘다.
@@ -181,8 +204,8 @@ v2와 다른 점: 중요도를 한 턴 늦게(배경 호출) 받지 않고 같�
 
 ## 9. 저장 (`supabase/schema.sql`, 선택)
 
-- `sessions` — 언어·공고·처음 글·끝 글·과제 표·요약·성공 확인·첫 진단 루브릭(`rubric`: `{rubric, strengths}`).
-- 이미 만든 DB에는 `supabase/migrations/`의 파일을 차례로 더한다 (`20261103010000_rubric.sql`: `rubric` 칸).
+- `sessions` — 언어·공고·처음 글·끝 글·과제 표(완료 항목 포함)·요약·성공 확인·첫 진단 루브릭(`rubric`)·끝 재진단(`final_rubric`, 실패하면 null).
+- 이미 만든 DB에는 `supabase/migrations/`의 파일을 차례로 더한다 (`20261103010000_rubric.sql` · `20261116010000_final_rubric.sql`).
 - `turns` — 턴마다 학생 말·튜터 말·`user_action`(판정 라벨)·`agent_action`(코드 행위)·`apr`(시퀀스 안의 자리)·판정 전체·지연.
   NCF 지표(시퀀스 완료율·상호작용 효율·확장 종류 분포)를 이 행들로 나중에 계산한다.
 - 서버만 service_role 키로 쓴다. RLS를 켜고 정책을 두지 않아 브라우저에서는 읽기·쓰기 모두 막힌다. 환경 변수가 없으면 저장만 건너뛴다.
@@ -236,6 +259,7 @@ npx netlify-cli dev                        # 로컬 http://localhost:8888
 - **음성은 브라우저 내장 엔진.** Chrome 음성 인식은 구글 서버를 거친다. 연구실 lab-server로 바꿀 때 `src/client/voice/`만 교체한다.
 - 메아리: 튜터가 말하는 동안은 인식을 끄고(반이중), 끼어들기는 Chrome 메아리 제거가 걸린 마이크 소리 크기로 잡는다. 끼어든 첫 음절 일부는 인식이 다시 켜지기 전이라 놓칠 수 있다. 서버 TTS가 없으면(브라우저 음성) 메아리 제거가 약해 끼어들기 문턱을 높인다.
 - 판정 정확도는 지어낸 대본 기준이다. 사람 튜터 코퍼스의 실제 학생 발화로는 아직 재지 않았다.
-- 재평가는 한 번 호출이라 같은 입력에도 판정이 흔들릴 수 있다 — 흔들리면 순서를 바꿔 두 번 묻는 방식으로 되돌린다.
+- 재평가는 한 번 호출이다. 항목별 절대 판정으로 바꿔(2026-11-16) 순서 편향은 없어졌지만, 항목 문장이 모호하면 흔들릴 수 있다 — 흔들리는 항목은 대본 목업으로 문장을 다듬는다.
+- 끝 재진단과 요약이 Sonnet 2회를 나란히 부른다 — Netlify 함수 시간 제한(26초) 안에 들어야 한다.
 - Netlify 함수 시간 제한을 26초로 올려야 진단(Sonnet)이 안전하다.
 - 1차 범위 밖 (NCF 문서 0절): 부분 반복·들음 확인·"잠깐만요"·퀴즈 흐름·화면 힌트 확장·영어 세션 실측.

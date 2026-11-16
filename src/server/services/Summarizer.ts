@@ -22,7 +22,7 @@ export class Summarizer {
 
   static table(state: SessionState, now: number): string {
     return state.tasks
-      .map((t) => `${t.order}. ${t.goal} | ${t.status} | ${mmss(taskTimeMs(t, now))} | ${t.turns}턴 | 수정 ${t.edits}회${t.fromExemplar ? ' | 시범 문장' : ''} | ${t.evidence ?? '-'}`)
+      .map((t) => `${t.order}. ${t.goal} | ${t.status} | ${mmss(taskTimeMs(t, now))} | ${t.turns}턴 | 수정 ${t.edits}회 | ${t.evidence ?? '-'}`)
       .join('\n');
   }
 }

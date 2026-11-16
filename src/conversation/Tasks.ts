@@ -1,7 +1,5 @@
 // 과제 표를 다루는 작은 연산 — 모두 새 상태를 돌려준다 (받은 상태는 그대로)
-import { activeTask, type Open, type SessionState, type Task, type TaskStatus } from '../state';
-
-const squash = (x: string) => x.replace(/["“”'‘’]/g, '').replace(/\s+/g, ' ').trim();
+import { activeTask, type Criterion, type Open, type SessionState, type Task, type TaskStatus, type Verdict } from '../state';
 
 export class Tasks {
   static update(s: SessionState, id: string, patch: Partial<Task>): SessionState {
@@ -51,8 +49,36 @@ export class Tasks {
     return { pattern: 'P1', firstPair: say, effect: 'startTask', taskId: t.id };
   }
 
-  // 튜터가 준 시범 문장이 고친 문단에 그대로 들어갔나 (따옴표·공백 무시)
-  static exemplarUsed(t: Task, after: string): boolean {
-    return !!t.exemplar && squash(after).includes(squash(t.exemplar));
+  // ── 완료 항목 (체크리스트, 2026-11-16) ──
+
+  // 결론 확인(A2.6)을 학생이 받았다 — 합의한 항목이 진단의 초안(llm 항목)을 대신한다. 코드 항목(상투 표현 · 새 내용)은 그대로.
+  // 내용 과제의 합의 항목은 학생이 꺼낸 경험이라 모두 '새 내용'이다 — 그러면 코드가 넣어 둔 일반 새-내용 항목(n1)은 뺀다.
+  // 모델이 항목을 내지 않았으면 결론 문장 자체를 항목 하나로 쓴다 (합의한 내용이 글에 들어가야 한다)
+  static confirmCriteria(s: SessionState, id: string, agreed: readonly string[], conclusion: string): SessionState {
+    const t = Tasks.find(s, id);
+    if (!t) return s;
+    const texts = agreed.map((x) => x.trim()).filter(Boolean).slice(0, 3);
+    const items = texts.length ? texts : [conclusion.trim()].filter(Boolean);
+    const needsNew = t.kind === 'content';
+    const fresh: Criterion[] = items.map((text, i) => ({ id: `a${i + 1}`, text, check: 'llm', source: 'conclusion', met: false, ...(needsNew ? { needsNew: true } : {}) }));
+    const kept = t.criteria.filter((c) => c.source === 'code' && !(needsNew && c.id === 'n1'));
+    return Tasks.update(s, id, { criteria: [...fresh, ...kept], evidence: conclusion });
+  }
+
+  // 결론 확인을 거쳐 항목이 확정됐나 (학생과 합의한 항목이 하나라도 있나)
+  static confirmed(t: Task): boolean {
+    return t.criteria.some((c) => c.source === 'conclusion');
+  }
+
+  // 재평가 결과를 항목에 적는다 — met인 항목만 참, 나머지는 거짓 (학생이 지웠을 수도 있다)
+  static applyVerdict(s: SessionState, id: string, v: Verdict): SessionState {
+    const t = Tasks.find(s, id);
+    if (!t) return s;
+    return Tasks.update(s, id, { criteria: t.criteria.map((c) => ({ ...c, met: v.met.includes(c.id) })) });
+  }
+
+  // 아직 못 채운 항목
+  static unmet(t: Task): readonly Criterion[] {
+    return t.criteria.filter((c) => !c.met);
   }
 }

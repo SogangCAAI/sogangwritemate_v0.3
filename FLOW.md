@@ -1,6 +1,6 @@
 # 서강 글벗 v3 — 대화 흐름 (코드 지도)
 
-갱신 2026-11-03 · 근거: `제안 - NCF 패턴으로 대화 설계.md` §2–§5 · `대본 목업 - NCF 패턴 1차.md` · 코드: `src/conversation/`
+갱신 2026-11-16 · 근거: `제안 - NCF 패턴으로 대화 설계.md` §2–§5 · `대본 목업 - NCF 패턴 1차.md` · 코드: `src/conversation/`
 
 대화 흐름은 **State 패턴**이다. 세션(`TutoringSession`)이 지금 상태에서 **국면(Phase)** 하나를 고르고, 학생의 수(판정 라벨) 하나마다 그 국면의 메서드 하나를 부른다.
 국면은 따로 저장하지 않는다 — 클라이언트와 서버가 주고받는 `SessionState`의 `stage · open.pattern · open.effect · 진행 중 과제`에서 매번 고른다 (`PhaseFactory.for`).
@@ -30,11 +30,13 @@ stateDiagram-v2
 
   Experience --> Experience: ANSWER · CONTINUER (A5.1/A5.5)<br/>→ 원문을 experience에 모음
   Experience --> Conclusion: 모델이 해석 제시 (opens=A2.6)
-  Conclusion --> Editing: ACCEPT → evidence 기록 (아직 done 아님)
+  Conclusion --> Editing: ACCEPT → evidence 기록 + 합의한 완료 항목 확정 (아직 done 아님)
   Conclusion --> Conclusion: REJECT → 모델이 고친 해석 (A2.6)
 
-  Editing --> Editing: 편집 !better → 힌트 (A4.1)<br/>EXEMPLAR_REQ → 시범 (P1.4)
-  Editing --> Idle: 편집 better · 시범 문장 그대로 → done
+  Editing --> Editing: 편집, 항목 일부만 충족 → ✓/✗ 갱신 + 못 채운 항목 힌트 (A4.1)<br/>EXEMPLAR_REQ → 쓰는 법 보여 주기 (P1.4 뼈대)
+  Editing --> Check: 편집, 항목 전부 충족 → 확인 질문 (A4.0)
+  Check --> Idle: 주장·근거를 맞게 짚음 (positive) → done
+  Check --> Editing: 못 짚음 → 힌트 (A4.1), 다시 고치기
 
   Experience --> Idle: ABORT → skipped
   Conclusion --> Idle: ABORT → skipped
@@ -70,8 +72,9 @@ stateDiagram-v2
 | 수 | 하는 일 | agentAction |
 |---|---|---|
 | CONFUSED ×1 (`ConfusionHandler`) | 모델이 질문을 좁히는 단서 하나 + 같은 질문 (`open=A5.1`), `confusedStreak=1` | clue_up |
-| CONFUSED ×2 | 모델이 시범 한 문장 (`open=P1.4`, exemplar 기록 — 대필 금지 그대로), `confusedStreak=2` | exemplar |
-| CONFUSED ×3 | "이건 나중에 다시 봐요. 다음으로 넘어갈게요." (코드) — 과제 `skipped`(evidence '학생이 막힘') → `Agenda.proposeNext` (시간 규칙 그대로, 남은 7분 미만이면 마무리) | move_on:P1 / move_on:C4.0 |
+| CONFUSED ×2 | 모델이 쓰는 법을 보여 준다 — 틀 + 다른 사람의 예 + 학생 재료의 자리 (`open=P1.4`, 문장을 써 주지 않는다), `confusedStreak=2` | scaffold |
+| CONFUSED ×3 | 모델이 자리를 하나씩 불러 주고 학생이 채운다 (`open=A5.0`), `confusedStreak=3` | assemble |
+| CONFUSED ×4 | "이건 나중에 다시 봐요. 다음으로 넘어갈게요." (코드) — 과제 `skipped`(evidence '학생이 막힘') → `Agenda.proposeNext` (시간 규칙 그대로, 남은 7분 미만이면 마무리) | move_on:P1 / move_on:C4.0 |
 | CONFUSED (과제 없음 · 마무리) | 과제 없음: 모델이 풀어 말하고 열린 짝 유지 / 마무리: 그 국면의 답(성공 확인 부정 → C4.7) | clarify / 국면 |
 | OFF_GOAL, 요청 문단 = pending 과제이고 (`importance=higher` 또는 두 번째 이상 요청) (`OffGoalHandler`) | 지금 과제는 `pending`으로(들은 것·턴 수 유지), 요청한 과제 시작 + "좋아요, 그것부터 봐요. 하던 건 나중에 다시 해요. {opener}" (코드, `open=A5.1`) | sequence_student_first |
 | OFF_GOAL 첫 요청 (higher 아님) | 모델이 요청을 지금 과제와 이어 받고 계속 (겹쳐 받기). `lower`면 "양보 + 그러나 + 이유" | subsume / keep_goal |
@@ -110,15 +113,21 @@ stateDiagram-v2
 
 ### ConclusionPhase — `phases/ConclusionPhase.ts`
 - **NCF**: Formulation + A2.6 Summary
-- **튜터가 방금** (모델): "그러니까 ~한 경험이네요. 2문단에 넣는 거, 맞아요?"
-- ACCEPT → 결론 문장을 `evidence`로 기록, 짝을 닫음 → Editing (아직 done 아님 — 글이 바뀌어야 한다)
+- **튜터가 방금** (모델): "그러니까 ~한 경험이네요. 2문단에 넣는 거, 맞아요?" — 이때 모델이 완료 항목 후보(`judge.criteria`, 행동·결과·자리)를 함께 내고 `open.criteria`에 실린다
+- ACCEPT → 결론 문장을 `evidence`로, 합의한 항목이 진단 초안을 대신해 과제의 체크리스트가 됨 (`Tasks.confirmCriteria`, 코드 항목은 남음), 짝을 닫음 → Editing (아직 done 아님 — 글이 바뀌어야 한다)
 - REJECT → 기본값: 모델이 고친 해석으로 다시 A2.6
 
 ### EditingPhase — `phases/EditingPhase.ts`
-- **NCF**: A4.1 힌트 · P1 제안 · P1.4 시범 (과제 진행 중, 열린 짝이 없거나 P1·P1.4)
-- **튜터가 방금** (모델): "고쳐 보세요" · 표현 과제의 질문·힌트 · 시범 한 문장 / (코드) 재평가 힌트
-- 말에 대한 수는 모두 기본값 (`Phase`)
-- **`onEdit`** (어느 국면에서 와도 이 규칙): 대상 밖 문단 → 무시 · 시범 문장 그대로 → done(fromExemplar), "네, 시범 문장이 들어갔어요." · better → done, "좋아졌어요. {reason}" · !better → active, reason이 힌트 (A4.1) · 재평가 없음 → 수정 횟수만
+- **NCF**: A4.1 힌트 · P1 제안 · P1.4 쓰는 법 보여 주기(뼈대) (과제 진행 중, 열린 짝이 없거나 P1·P1.4)
+- **튜터가 방금** (모델): "고쳐 보세요" · 표현 과제의 질문·힌트 · 뼈대(틀 + 다른 사람의 예 + 학생 재료의 자리) / (코드) 재평가 힌트. 문장을 써 주지 않는다 (2026-11-16)
+- 말에 대한 수는 모두 기본값 (`Phase`). 형식 과제는 고치기 전에 "무엇을 주장하고 무엇으로 받칠지"를 묻고 A2.6으로 합의한다 (`TurnPrompt`의 `form` 칸)
+- **`onEdit`** (어느 국면에서 와도 이 규칙): 대상 밖 문단 → 무시 · 항목 전부 충족(verdict.done) → **아직 done 아님**, "항목은 다 들어갔어요." + 확인 질문을 열어(`open=A4`) → CheckPhase · 일부만 → active, 항목 ✓/✗ 갱신, reason이 못 채운 항목의 힌트 (A4.1) · 재평가 없음 → 수정 횟수만. 판정 방식은 ARCHITECTURE.md 6절
+
+### CheckPhase — `phases/CheckPhase.ts`
+- **NCF**: A4 Quiz (답을 알고 묻기) — 완료 직전 확인. "지금 N문단이 하고 싶은 말이 뭐고, 어느 문장이 그걸 받쳐 주죠?"
+- **튜터가 방금** (코드): 확인 질문. 이해는 주장이 아니라 시연 — 항목을 다 채워도 학생이 설명해야 끝난다 (2026-11-16, 교사 원칙)
+- ANSWER·ACCEPT, `positive=true` → 과제 done, 모델의 짧은 인정 → Idle / `positive=false` → 모델의 힌트 하나 + 그 자리를 고쳐 보게 (A4.1), 과제는 active 그대로 → 다시 고치면 Editing이 재평가하고 다 채우면 확인 질문을 다시 연다
+- CONFUSED → 막힘 사다리 (국면과 상관없이 먼저)
 
 ### IdlePhase — `phases/IdlePhase.ts`
 - **NCF**: B4.0 닫힌 뒤 짧은 쉼 (과제 사이, 진행 중 과제 없음)
@@ -143,12 +152,12 @@ stateDiagram-v2
 | `Phase.ts` | 바탕 클래스 — 템플릿 메서드와 기본값 (과제 중 일반 규칙) |
 | `PhaseFactory.ts` | 상태 필드 → 국면 (위에서부터 처음 맞는 줄) |
 | `RepairHandler.ts` | B2 수리 · B1 UNCLEAR · B4.4 |
-| `ConfusionHandler.ts` | CONFUSED 막힘 사다리 (단서 → 시범 → 미루고 다음) |
+| `ConfusionHandler.ts` | CONFUSED 막힘 사다리 (단서 → 뼈대 → 자리 불러 주기 → 미루고 다음) |
 | `OffGoalHandler.ts` | OFF_GOAL 다른 요청 (겹쳐 받기 · 학생 안건 먼저 · 따르기) |
 | `Interruption.ts` | 끼어들기 비율 → 등급(none·some·high) · 짧게 |
 | `Agenda.ts` | 다음 파트 · 다음 과제 제안 · 마무리 시작 · 시간 nudge |
 | `Say.ts` | 결과 만들기: `nothing` · `line` · `code`(last 갱신) · `model`(opens 반영) · `end` |
-| `Tasks.ts` | 과제 표 연산 (update · start · finish · skip · countTurn · exemplarUsed) |
+| `Tasks.ts` | 과제 표 연산 (update · start · finish · skip · countTurn · confirmCriteria · applyVerdict) |
 | `src/decide.ts` | 예전 입구 `next()` · `wantsPause` · `editNeedsEval` · `newSession` — `TutoringSession`에 위임 |
 
 ## 3. 따라가 보기 — 목업 M1→M4
@@ -164,10 +173,10 @@ stateDiagram-v2
 | M1-7 | "네 좋아요." ACCEPT | `onSay` | TaskProposal`.onAccept` → `Tasks.start` | t1 active, `stage=content`, "좋아요. {opener}" (코드), `open=A5.1` → **Experience** |
 | M2-9·11·13 | 경험 이야기 ANSWER | `onSay` (`countTurn`: t1.turns+1) | Experience`.onAnswer` → `collect` → `Agenda.nudge` | `experience`에 원문 3개, `open=A5.5`; 13번에 모델이 "또 있어요?"(A5.0) |
 | M2-15 | "아니요 그거요." ANSWER | `onSay` | Experience(A5.0)`.onAnswer` → 기본값 | 경험에 붙이지 않음; 모델이 해석 제시 (opens=A2.6) → **Conclusion** |
-| M3-17 | "네 맞아요." ACCEPT | `onSay` | Conclusion`.onAccept` | `t1.evidence` = 결론 문장, `open=null` ("좋아요, 고쳐 보세요" 모델) → **Editing** |
-| M4-19 | [편집] 2문단 | `EvaluateHandler` → `editNeedsEval` 참 → `Evaluator.evaluate`(Haiku) → `onEdit` | `EditingPhase.onEdit` (better=false) | t1 active, `edits=1`, reason을 힌트로 (코드, A4.1, `open=P1`) |
+| M3-17 | "네 맞아요." ACCEPT | `onSay` | Conclusion`.onAccept` → `Tasks.confirmCriteria` | `t1.evidence` = 결론 문장, `t1.criteria` = 합의한 항목(a1, a2…), `open=null` ("좋아요, 고쳐 보세요" 모델) → **Editing** |
+| M4-19 | [편집] 2문단 | `EvaluateHandler` → `editNeedsEval` 참 → `Evaluator.evaluate`(코드 항목 → Haiku) → `onEdit` | `EditingPhase.onEdit` (done=false, met=[c1]) | t1 active, `edits=1`, 항목 1/2 ✓, reason(못 채운 항목 힌트)을 말함 (코드, A4.1, `open=P1`) |
 | M4-21 | "아 네." ACCEPT | `onSay` | Editing`.onAccept` → 기본값 | 모델 짧은 답, `open=null` |
-| M4-22 | [편집] 2문단 | `EvaluateHandler` → `onEdit` | `EditingPhase.onEdit` (better=true) | t1 done, `edits=2`, "좋아졌어요. {reason}" (코드) → **Idle** (쉼 기다림) |
+| M4-22 | [편집] 2문단 | `EvaluateHandler` → `onEdit` | `EditingPhase.onEdit` (done=true) | t1 done, `edits=2`, 항목 2/2 ✓, "좋아졌어요. {reason}" (코드) → **Idle** (쉼 기다림) |
 | M4-24 | (쉼) | `onPause` | Idle`.onPause` → `Agenda.proposeNext` | "다음 과제는 …, 시작해 볼까요?" `open=P1 startTask t2` → **TaskProposal** |
 
 ## 시간 규칙 (사용자 결정 2026-11-03)

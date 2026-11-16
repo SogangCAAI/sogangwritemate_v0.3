@@ -14,12 +14,12 @@ export const TURN_TOOL: Tool = {
       paraphrase: { type: 'string' },
       example: { type: 'string' },
       opens: { type: 'string', enum: [...PATTERNS, 'none'] },
-      exemplar: { type: 'string' },
       positive: { type: 'boolean' },
       importance: { type: 'string', enum: [...IMPORTANCES] },
       targetParagraph: { type: 'integer' },
+      criteria: { type: 'array', items: { type: 'string' } },
     },
-    required: ['move', 'reply', 'paraphrase', 'example', 'opens', 'exemplar', 'positive', 'importance', 'targetParagraph'],
+    required: ['move', 'reply', 'paraphrase', 'example', 'opens', 'positive', 'importance', 'targetParagraph', 'criteria'],
   },
 };
 
@@ -33,10 +33,11 @@ export function parseJudge(x: unknown): Judge {
     paraphrase: typeof j.paraphrase === 'string' ? j.paraphrase : '',
     example: typeof j.example === 'string' ? j.example : '',
     opens: oneOf(j.opens ?? 'none', [...PATTERNS, 'none'] as const, 'judge.opens'),
-    exemplar: typeof j.exemplar === 'string' ? j.exemplar : '',
     positive: j.positive === true,
     // OFF_GOAL 전용 칸 — 모양이 틀리면 실패시키지 않고 '없음'으로 본다
     importance: IMPORTANCES.includes(j.importance as Importance) ? (j.importance as Importance) : 'none',
     targetParagraph: Number.isInteger(j.targetParagraph) && (j.targetParagraph as number) > 0 ? (j.targetParagraph as number) : 0,
+    // A2.6 전용 칸 — 결론이 확인되면 과제의 완료 항목이 된다. 모양이 틀리면 빈 목록 (결론 문장이 대신 항목이 된다)
+    criteria: Array.isArray(j.criteria) ? j.criteria.filter((x): x is string => typeof x === 'string').map((x) => x.trim().slice(0, 200)).filter(Boolean).slice(0, 3) : [],
   };
 }

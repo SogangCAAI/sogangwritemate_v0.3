@@ -19,9 +19,11 @@ const KO = {
   switchTask: '좋아요, 그것부터 봐요. 하던 건 나중에 다시 해요.', // 학생 안건 먼저 (v2 sequence_student_first)
   abortTask: "네, 여기까지 할게요. 요약에 '다음에 볼 것'으로 남길게요.",
   abortBriefing: '네, 바로 시작할게요.',
-  exemplarDone: '네, 시범 문장이 들어갔어요.',
+  allMet: '항목은 다 들어갔어요.',
+  checkQuestion: (p: number) => `마지막으로 하나만요 — 지금 ${p}문단이 하고 싶은 말이 뭐고, 어느 문장이 그걸 받쳐 주죠?`, // 완료 직전 확인 (A4)
   better: '좋아졌어요.',
   tryAgain: '완료 기준을 다시 보면서 한 번 더 고쳐 볼래요?',
+  codeHint: (item: string) => `아직 이게 남았어요: ${item}. 한 번 더 고쳐 볼래요?`, // 코드만 판정한 턴의 힌트
   closingLead: '네, 정리하고 끝낼게요.',
   markers: ['먼저,', '다음으로,', '마지막으로,'],
   successCheck: '오늘 고친 글, 처음보다 나아진 것 같아요?',
@@ -48,9 +50,11 @@ const EN: typeof KO = {
   switchTask: "Sure, let's do that first. We'll come back to this one later.",
   abortTask: "Okay, let's stop here. I'll list it under 'next time' in the summary.",
   abortBriefing: "Okay, let's get started.",
-  exemplarDone: 'Good, the sample sentence is in.',
+  allMet: 'Every item is in.',
+  checkQuestion: (p: number) => `One last thing — what is paragraph ${p} claiming now, and which sentence backs it up?`,
   better: "That's better.",
   tryAgain: 'Check the criterion again and try one more edit?',
+  codeHint: (item: string) => `One thing is still left: ${item}. Want to try once more?`,
   closingLead: "Okay, let's wrap up.",
   markers: ['First,', 'Next,', 'Finally,'],
   successCheck: 'Does your draft feel better than when we started?',

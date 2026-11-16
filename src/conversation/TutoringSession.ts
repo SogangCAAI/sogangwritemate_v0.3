@@ -8,7 +8,8 @@
 //  TaskProposalPhase   phases/TaskProposalPhase.ts   P1 (effect)          수락 → 과제 시작 A5.1 / timeout · 거절 → 건너뜀·계속
 //  ExperiencePhase     phases/ExperiencePhase.ts     A5.1 · A5.5 · A5.0   답 → 경험 모음(A5.5) → 모델이 A2.6을 열면 결론 확인
 //  ConclusionPhase     phases/ConclusionPhase.ts     A2.6                 수락 → evidence 기록 → 문단 고치기 / 거절 → 다시 A2.6
-//  EditingPhase        phases/EditingPhase.ts        없음 · P1 · P1.4     편집 → 재평가 better·시범 그대로 → done / 아니면 힌트
+//  EditingPhase        phases/EditingPhase.ts        없음 · P1 · P1.4     편집 → 재평가: 항목 전부 충족 → 확인 질문(A4) / 아니면 힌트
+//  CheckPhase          phases/CheckPhase.ts          A4                   학생이 주장·근거를 짚으면 done / 못 짚으면 힌트 → 다시 고치기
 //  IdlePhase           phases/IdlePhase.ts           없음 (과제 사이)      쉼 → 다음 과제 제안 (없으면 마무리)
 //  ClosingPhase        phases/ClosingPhase.ts        A3 요약 → C4         파트 → 성공 확인 → 작별
 //  EndedPhase          phases/EndedPhase.ts          —                    움직이지 않음
@@ -70,10 +71,10 @@ export class TutoringSession {
     return this.phase.awaitsPause;
   }
 
-  // 학생이 대상 문단을 고쳤을 때 재평가(Haiku)를 불러야 하나 — 시범 문장을 그대로 넣었으면 부르지 않는다
-  editNeedsEval(paragraph: number, after: string): boolean {
+  // 학생이 대상 문단을 고쳤을 때 재평가(Haiku)를 불러야 하나 — 진행 중 과제의 대상 문단이면 언제나 (시범 문장 지름길은 2026-11-16에 없앴다)
+  editNeedsEval(paragraph: number, _after: string): boolean {
     const t = activeTask(this.state);
-    return !!t && t.target.paragraph === paragraph && !Tasks.exemplarUsed(t, after);
+    return !!t && t.target.paragraph === paragraph;
   }
 
   // 이벤트 하나 → 결과 하나 (decide.next()가 이것을 부른다)

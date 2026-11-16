@@ -1,5 +1,5 @@
-// 결정적 사실 검사 — 길이 · 3번째 자리 · 인용 존재 · 시간 · 상투 표현 (LLM 없음)
-import { SESSION_MS, type SessionState } from './state';
+// 결정적 사실 검사 — 길이 · 3번째 자리 · 인용 존재 · 시간 · 상투 표현 · 완료 항목의 코드 검사 (LLM 없음)
+import { SESSION_MS, type Criterion, type SessionState } from './state';
 
 // 문장 경계: 마침표·물음표·느낌표(+닫는 따옴표) 뒤의 공백
 const SENTENCE_END = /(?<=[.?!。？！]["”’']?)\s+/;
@@ -89,4 +89,13 @@ export function findCliches(paragraphs: string[]): ClicheHit[] {
 // 과제에 쓴 시간 — 끝나지 않았으면 지금까지
 export function taskTimeMs(t: { startedAt?: number; endedAt?: number }, now: number): number {
   return t.startedAt === undefined ? 0 : (t.endedAt ?? now) - t.startedAt;
+}
+
+// ── 완료 항목 중 코드가 판정하는 것 (check !== 'llm') — 고친 문단 하나만 본다 ──
+
+export function codeCheck(c: Criterion, edited: string): boolean {
+  switch (c.check) {
+    case 'noCliche': return findCliches([edited]).length === 0;
+    case 'llm': return c.met; // 코드가 볼 수 없다 — 지금 값 그대로
+  }
 }

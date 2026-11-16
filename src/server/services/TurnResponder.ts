@@ -25,22 +25,24 @@ export class TurnResponder {
     return TurnResponder.tidy(j.reply ? j : { ...j, reply: lines(s.lang).ok }, s, short);
   }
 
-  // 이 턴의 문장 상한 — 기본 2, 시범 턴은 3(받음 + 시범 한 문장 + "바꿔도 돼요", 목업 M5-26).
-  // 학생이 자주 끼어들면(short, v2 shorten) 한 단계 줄인다: 기본 1, 시범 턴 2 (시범 문장이 잘려 나가지 않게)
+  // 이 턴의 문장 상한 — 기본 2. 쓰는 법을 보여 주는 턴(P1.4 비계 · 써 달라는 요청 · 막힘 2회째)은 4(받음 + 틀 + 다른 예 + 학생 재료 질문),
+  // 막힘 3회째(재료 불러 주기)는 3. 학생이 자주 끼어들면(short, v2 shorten) 한 단계 줄인다
   static maxSentences(j: Judge, s: SessionState | null, short: boolean): number {
-    const exemplarRung = j.move === 'CONFUSED' && !!s && s.confusedStreak === 1 && !!activeTask(s); // 막힘 2회째 = 시범
-    const base = j.opens === 'P1.4' || exemplarRung ? 3 : 2;
+    const inTask = !!s && !!activeTask(s);
+    const scaffold = j.opens === 'P1.4' || j.move === 'EXEMPLAR_REQ' || (j.move === 'CONFUSED' && inTask && s!.confusedStreak === 1);
+    const assemble = j.move === 'CONFUSED' && inTask && s!.confusedStreak === 2;
+    const base = scaffold ? 4 : assemble ? 3 : 2;
     return short ? base - 1 : base;
   }
 
   // 튜터가 이끈다 (사용자 결정 2026-11-03): 과제 중 모델 말이 질문·제안 없이 끝나면 과제 단계에 맞는 한 걸음을 코드가 붙인다.
-  // 예외 — 학생이 길게 말하는 중의 맞장구(A5.5·CONTINUER), 제안(P1)·시범(P1.4)으로 끝낸 말, 코드가 답하는 되묻기
+  // 예외 — 학생이 길게 말하는 중의 맞장구(A5.5·CONTINUER), 제안(P1)·뼈대(P1.4)로 끝낸 말, 확인 질문(A4)에 대한 답, 코드가 답하는 되묻기
   static lead(j: Judge, s: SessionState | null, reply = j.reply): string | null {
     const t = s ? activeTask(s) : undefined;
     if (!s || !t || (s.stage !== 'content' && s.stage !== 'form')) return null;
     // 모델의 opens 표시가 아니라 실제 문장으로 본다 — 'A5.1'이라 표시하고 물음 없이 끝내는 경우가 있었다 (실측)
     if (QUESTION_END.test(reply.trim()) || j.opens === 'P1' || j.opens === 'P1.4') return null;
-    if (j.move === 'CONTINUER' || s.open?.pattern === 'A5.5' || CODE_SERVED.has(j.move)) return null;
+    if (j.move === 'CONTINUER' || s.open?.pattern === 'A5.5' || s.open?.pattern === 'A4' || CODE_SERVED.has(j.move)) return null;
     const L = lines(s.lang);
     const p = t.target.paragraph;
     return t.kind === 'form' ? L.leadForm(p) : t.evidence ? L.leadEdit(p) : L.leadDraft(p);

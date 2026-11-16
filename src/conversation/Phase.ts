@@ -42,7 +42,7 @@ export abstract class Phase {
     return Say.model({ ...this.s, repaired: false }, j, true);
   }
 
-  // 수락 — 일반 제안(P1)·시범(P1.4)을 받았다
+  // 수락 — 일반 제안(P1)·뼈대(P1.4)를 받았다
   onAccept(j: Judge, now: number): Outcome {
     return Agenda.nudge(Say.model({ ...this.s, repaired: false, open: null }, j, false), now);
   }
@@ -64,9 +64,9 @@ export abstract class Phase {
     return Say.model({ ...this.s, repaired: true }, j, true);
   }
 
-  // 써 달라 — 시범 한 문장(P1.4, 대필 금지)
+  // 써 달라 — 문장을 써 주지 않는다. 쓰는 법을 보여 준다: 틀 + 다른 사람의 예 + 학생 재료의 자리 (P1.4 비계, 2026-11-16)
   onExemplarRequest(j: Judge): Outcome {
-    return Say.model({ ...this.s, repaired: false }, j, false);
+    return Say.model({ ...this.s, repaired: false }, { ...j, opens: 'P1.4' }, false);
   }
 
   // 그만 — 지금 과제(또는 제안된 과제)를 건너뛴다. 설득하지 않는다 (B5)

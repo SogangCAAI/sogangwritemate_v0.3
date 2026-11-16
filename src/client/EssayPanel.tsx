@@ -2,7 +2,7 @@
 // '수정 저장'을 누르면 재평가로 간다. 입력칸에 커서가 있는 동안 듣기는 멈춘다(onEditing).
 import { useEffect, useState } from 'react';
 import type { Rubric } from '../rubric';
-import type { Task } from '../state';
+import { criteriaProgress, type Task } from '../state';
 import { RubricCard } from './RubricCard';
 import { AutoTextarea } from './AutoTextarea';
 
@@ -18,6 +18,27 @@ interface Props {
 }
 
 const folio = (n: number) => String(n).padStart(2, '0');
+
+// 완료 항목 — 재평가가 본 ✓/✗. 항목이 아직 없으면(예전 과제) 완료 기준 한 문장
+function Checklist({ task }: { task: Task }) {
+  if (!task.criteria.length) return <p className="para-crit"><b>완료 기준</b> {task.doneWhen}</p>;
+  const { met, total } = criteriaProgress(task);
+  const confirmed = task.criteria.some((c) => c.source === 'conclusion');
+  return (
+    <div className="para-crit" role="group" aria-label="완료 항목">
+      <p><b>완료 항목</b> {met}/{total}{confirmed ? '' : ' · 이야기를 나누면 바뀔 수 있어요'}</p>
+      <ul className="crit-list">
+        {task.criteria.map((c) => (
+          <li key={c.id} className={c.met ? 'is-met' : ''}>
+            <span className="crit-mark" aria-hidden="true">{c.met ? '✓' : '○'}</span>
+            <span className="sr-only">{c.met ? '충족: ' : '아직: '}</span>{c.text}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 const charCount = (ps: readonly string[]) => ps.reduce((sum, p) => sum + p.replace(/\s/g, '').length, 0);
 
 export function EssayPanel({ paragraphs, task, busy, listenPaused, onSave, onEditing, rubric, strengths = '' }: Props) {
@@ -86,7 +107,7 @@ export function EssayPanel({ paragraphs, task, busy, listenPaused, onSave, onEdi
                 <span className="sr-only">{n}문단, </span>
                 {isTarget ? `지금 고치는 문단 · 과제 ${task!.order}` : `${n}문단 고치는 중`}
               </label>
-              {isTarget && <p className="para-crit"><b>완료 기준</b> {task!.doneWhen}</p>}
+              {isTarget && <Checklist task={task!} />}
               <AutoTextarea
                 id={`p${n}`}
                 value={draft}

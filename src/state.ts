@@ -1,6 +1,8 @@
 // 세션 상태와 판정 타입 — 근거: NCF 문서 5절, v3 제안서 2-1절
 // 서버는 상태를 들고 있지 않는다. 클라이언트가 매 턴 이 객체를 보내고, 새 객체를 돌려받는다.
 
+import type { RubricAxisKey } from './rubric';
+
 export type Lang = 'ko' | 'en';
 
 // 첫 진단의 평가(채점 루브릭)는 src/rubric.ts — 턴마다 오가는 상태에는 넣지 않는다 (화면만 들고 있다)
@@ -20,7 +22,9 @@ export type Move = (typeof MOVES)[number];
 export const CHIP_MOVES = ['REPEAT_REQ', 'PARAPHRASE_REQ', 'EXAMPLE_REQ', 'ABORT'] as const satisfies readonly Move[];
 
 // 튜터가 연 첫째 짝의 종류 (= previous_node)
-export const PATTERNS = ['A3', 'A5.1', 'A5.0', 'A5.5', 'A2.6', 'P1', 'P1.4', 'C4'] as const;
+//   P1.4 = 쓰는 법 보여 주기(비계: 틀 + 다른 사람의 예 + 학생 재료) — 2026-11-16부터 문장을 써 주지 않는다
+//   A4   = 완료 직전 확인 질문 ("이 문단이 뭘 주장하고 뭐가 받쳐 주죠?") — 항목을 다 채워도 학생이 설명해야 끝난다
+export const PATTERNS = ['A3', 'A5.1', 'A5.0', 'A5.5', 'A2.6', 'P1', 'P1.4', 'A4', 'C4'] as const;
 export type Pattern = (typeof PATTERNS)[number];
 
 // 코드가 뜻을 정해 둔 제안 — 수락하면 next()가 상태를 옮긴다
@@ -44,28 +48,44 @@ export interface Open {
   readonly part?: number;
   readonly effect?: Effect;
   readonly taskId?: string;
+  readonly criteria?: readonly string[]; // A2.6 전용: 결론이 확인되면 과제의 완료 항목이 될 문장들 (모델이 해석과 함께 낸다)
 }
 
 export type TaskStatus = 'pending' | 'active' | 'done' | 'skipped' | 'timeout';
 export type TaskKind = 'content' | 'form';
+
+// 과제 완료 항목 — 고친 문단 하나를 보고 "보인다 / 안 보인다"로 판정할 수 있는 관찰 항목 (2026-11-16, 체크리스트화)
+//   check: 'llm' = 재평가(Haiku)가 본다 · 'noCliche' = 코드가 본다 (상투 표현 사전, checks.ts)
+//   source: 'diagnosis' = 첫 진단의 초안 · 'conclusion' = A2.6 결론 확인에서 합의한 것 (초안을 대신한다) · 'code' = 코드가 넣은 것
+export type CriterionCheck = 'llm' | 'noCliche';
+export type CriterionSource = 'diagnosis' | 'conclusion' | 'code';
+
+export interface Criterion {
+  readonly id: string; // 과제 안에서 고유 (c1, c2, …)
+  readonly text: string; // 학생에게 보일 한 문장 ("2문단에 학생이 직접 한 행동이 들어간다")
+  readonly check: CriterionCheck;
+  readonly source: CriterionSource;
+  readonly met: boolean; // 마지막 재평가에서 충족했나
+  readonly needsNew?: boolean; // 원래 문단에 없던 정보(경험·이유·사실·연결)를 요구하는 항목 — 근거 인용이 원문에 이미 있으면 충족이 아니다
+}
 
 export interface Task {
   readonly id: string;
   readonly order: 1 | 2 | 3;
   readonly kind: TaskKind;
   readonly target: { readonly keyword?: string; readonly paragraph: number }; // paragraph는 1부터
+  readonly axis?: RubricAxisKey; // 이 과제가 나온 루브릭 축 — 연결·주장 축은 재평가 때 앞뒤 문단을 함께 본다
   readonly goal: string; // 학생에게 보여 줄 짧은 명사구 ("2문단에 협업 경험 넣기")
-  readonly doneWhen: string;
+  readonly doneWhen: string; // 완료 기준 한 문장 요약 (화면·프롬프트용). 판정은 criteria로 한다
+  readonly criteria: readonly Criterion[]; // 완료 항목 — 전부 충족하면 done. 비어 있으면 doneWhen 한 문장으로 판정한다
   readonly opener: string; // 과제를 여는 첫 질문 — 진단이 만들고, 학생이 과제를 수락하면 코드가 그대로 말한다
   readonly status: TaskStatus;
   readonly evidence?: string;
-  readonly fromExemplar: boolean;
   readonly startedAt?: number;
   readonly endedAt?: number;
   readonly turns: number;
   readonly edits: number;
   readonly experience: readonly string[]; // 학생 답 원문 (A5.1/A5.5)
-  readonly exemplar?: string; // 튜터가 준 시범 문장 — 그대로 들어가면 재평가 없이 done
   readonly nudged: boolean; // 시간 초과 제안을 이미 했나
 }
 
@@ -99,15 +119,17 @@ export interface Judge {
   readonly paraphrase: string;
   readonly example: string;
   readonly opens: Pattern | 'none';
-  readonly exemplar: string;
   readonly positive: boolean; // 성공 확인(C4.6)에 대한 답이 긍정인가
+  readonly criteria: readonly string[]; // opens=A2.6일 때 — 결론이 확인되면 과제의 완료 항목이 될 문장 1~3개 (아니면 빈 목록)
   readonly importance: Importance; // OFF_GOAL 전용 — 학생 안건 대 지금 과제
   readonly targetParagraph: number; // OFF_GOAL 전용 — 학생이 집은 문단 (1부터, 없으면 0)
 }
 
+// 재평가 결과 — 항목마다 절대 판정 ("고친 문단에 보이나"), 전부 충족이면 done. 원래 문단과의 상대 비교가 아니다
 export interface Verdict {
-  readonly better: boolean;
-  readonly reason: string;
+  readonly done: boolean;
+  readonly met: readonly string[]; // 충족한 항목 id (criteria가 비어 있으면 done일 때 ['doneWhen'])
+  readonly reason: string; // 튜터가 학생에게 그대로 말할 문장 — done이면 칭찬, 아니면 못 채운 항목에 대한 힌트 하나
 }
 
 export type TurnEvent =
@@ -131,6 +153,11 @@ export function activeTask(s: SessionState): Task | undefined {
   return s.tasks.find((t) => t.status === 'active');
 }
 
+// 과제 진행도 — 충족한 항목 수 / 전체 (항목이 없으면 0/0)
+export function criteriaProgress(t: Task): { met: number; total: number } {
+  return { met: t.criteria.filter((c) => c.met).length, total: t.criteria.length };
+}
+
 export function emptyJudge(move: Move): Judge {
-  return { move, reply: '', paraphrase: '', example: '', opens: 'none', exemplar: '', positive: false, importance: 'none', targetParagraph: 0 };
+  return { move, reply: '', paraphrase: '', example: '', opens: 'none', positive: false, importance: 'none', targetParagraph: 0, criteria: [] };
 }

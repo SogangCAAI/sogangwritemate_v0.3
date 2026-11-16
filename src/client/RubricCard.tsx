@@ -10,25 +10,34 @@ function Grade({ grade }: { grade: RubricGrade }) {
   return <span className={`grade ${GRADE_CLASS[grade]}`}>{GRADE_LABELS[grade]}</span>;
 }
 
-interface Props { rubric: Rubric; strengths: string; open?: boolean }
+interface Props {
+  rubric: Rubric; strengths: string; open?: boolean;
+  kicker?: string; // 카드 제목 — 기본 '첫 진단 평가', 요약 화면의 끝 재진단은 '끝 진단 평가'
+  intro?: string | null; // 안내문 — null이면 숨김
+  foot?: string | null; // 꼬리말 — null이면 숨김
+  idPrefix?: string; // 한 화면에 카드가 둘일 때 aria id가 겹치지 않게
+}
 
-export function RubricCard({ rubric, strengths, open = true }: Props) {
+const DEFAULT_INTRO = '방금 받은 첫 진단 평가예요. 글을 다섯 가지 기준으로 살펴본 결과이고, 항목을 누르면 판정 이유가 보여요.';
+const DEFAULT_FOOT = '이 카드는 세션 내내 바뀌지 않아요. 세션이 끝나면 요약 화면에서 다시 볼 수 있어요.';
+
+export function RubricCard({ rubric, strengths, open = true, kicker = '첫 진단 평가', intro = DEFAULT_INTRO, foot = DEFAULT_FOOT, idPrefix = 'axis' }: Props) {
   const [openAxis, setOpenAxis] = useState<RubricAxisKey | null>(null);
 
   return (
     <details className="diag" open={open}>
       <summary>
-        <span className="diag-kicker">첫 진단 평가</span>
+        <span className="diag-kicker">{kicker}</span>
         <span className="diag-toggle" aria-hidden="true" />
       </summary>
-      <p className="diag-intro">방금 받은 첫 진단 평가예요. 글을 다섯 가지 기준으로 살펴본 결과이고, 항목을 누르면 판정 이유가 보여요.</p>
+      {intro && <p className="diag-intro">{intro}</p>}
       {strengths && <p className="diag-strengths"><b>잘한 점</b> {strengths}</p>}
 
       <ul className="axes">
         {RUBRIC_AXES.map((a) => {
           const entry = rubric[a.key];
           const isOpen = openAxis === a.key;
-          const panelId = `axis-${a.key}`;
+          const panelId = `${idPrefix}-${a.key}`;
           return (
             <li key={a.key} className={`axis${isOpen ? ' is-open' : ''}`}>
               <button
@@ -67,7 +76,7 @@ export function RubricCard({ rubric, strengths, open = true }: Props) {
           );
         })}
       </ul>
-      <p className="diag-foot">이 카드는 세션 내내 바뀌지 않아요. 세션이 끝나면 요약 화면에서 다시 볼 수 있어요.</p>
+      {foot && <p className="diag-foot">{foot}</p>}
     </details>
   );
 }

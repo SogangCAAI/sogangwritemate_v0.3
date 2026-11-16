@@ -1,11 +1,12 @@
 // 진단 출력 — 채점 루브릭(5축 × 하/중/상, v2와 같은 판정) + 잘한 점 + 과제 정확히 3개 + 브리핑 3파트
 import type { Tool } from '../../llm/LlmClient';
-import type { Task } from '../../../state';
+import type { Criterion, Task } from '../../../state';
+import { findCliches } from '../../../checks';
 import {
   axisRank, RUBRIC_AXIS_KEYS, RUBRIC_GRADES, worstJudged,
   type AlignmentSubKey, type Rubric, type RubricAxisKey, type RubricAxisResult, type RubricGrade, type RubricJudgement,
 } from '../../../rubric';
-import { clip, fail, firstN, num, obj, oneOf, strList, type Obj } from '../fields';
+import { clip, fail, firstN, num, obj, oneOf, type Obj } from '../fields';
 import { KINDS } from '../RequestParser';
 
 const GRADE = { type: 'string', enum: [...RUBRIC_GRADES] };
@@ -44,10 +45,14 @@ export const DIAGNOSE_TOOL: Tool = {
             paragraph: { type: 'integer' },
             keyword: { type: 'string' },
             goal: { type: 'string' },
+            criteria: {
+              type: 'array',
+              items: { type: 'object', properties: { text: { type: 'string' }, needsNew: { type: 'boolean' } }, required: ['text', 'needsNew'] },
+            },
             doneWhen: { type: 'string' },
             opener: { type: 'string' },
           },
-          required: ['axis', 'kind', 'paragraph', 'keyword', 'goal', 'doneWhen', 'opener'],
+          required: ['axis', 'kind', 'paragraph', 'keyword', 'goal', 'criteria', 'doneWhen', 'opener'],
         },
       },
       briefing: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'string' } },
@@ -94,36 +99,67 @@ export function parseRubric(x: unknown): Rubric {
 
 const isAxis = (x: unknown): x is RubricAxisKey => RUBRIC_AXIS_KEYS.includes(x as RubricAxisKey);
 
+const MAX_CRITERIA = 3;
+export const NO_CLICHE_TEXT = { ko: (p: number) => `${p}문단에 상투 표현이 없다`, en: (p: number) => `Paragraph ${p} has no stock phrases` };
+// 새로 보여 줘야 하는 것 — 모델이 needsNew 항목을 하나도 내지 않으면 코드가 넣는다 (문장 하나 바꿔 쓰기로는 통과하지 못하게, 2026-11-16)
+export const NEEDS_NEW_TEXT = {
+  ko: (p: number, kind: Task['kind']) => `${p}문단에 원래 없던 ${kind === 'content' ? '학생의 경험·사실' : '구체적 사실(무엇을·얼마나)'}이 들어간다`,
+  en: (p: number, kind: Task['kind']) => `Paragraph ${p} includes ${kind === 'content' ? "the student's experience or a fact" : 'a concrete fact (what, how much)'} that was not there before`,
+};
+
+interface RawCriterion { text: string; needsNew: boolean }
+const rawCriterion = (x: unknown): RawCriterion | null => {
+  if (typeof x === 'string') return x.trim() ? { text: x.trim().slice(0, 200), needsNew: false } : null;
+  if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
+  const o = x as Record<string, unknown>;
+  return typeof o.text === 'string' && o.text.trim() ? { text: o.text.trim().slice(0, 200), needsNew: o.needsNew === true } : null;
+};
+
+// 완료 항목 — 모델이 낸 관찰 문장(llm, 3개까지, 각각 '새 내용'인지) + 코드가 넣는 항목. 모델이 비우면 doneWhen 한 문장이 항목이 된다.
+// 코드 항목: ① 대상 문단에 상투 표현이 있고 글을 고치는(form) 과제면 "상투 표현이 없다"(코드가 검사) ② 새 내용을 요구하는 항목이 없으면 하나 넣는다
+function criteriaOf(raw: unknown, doneWhen: string, kind: Task['kind'], paragraph: number, paragraphs: readonly string[], lang: 'ko' | 'en'): Criterion[] {
+  const given = Array.isArray(raw) ? raw.map(rawCriterion).filter((x): x is RawCriterion => !!x) : [];
+  const texts = (given.length ? given : [{ text: doneWhen, needsNew: false }]).slice(0, MAX_CRITERIA);
+  const items: Criterion[] = texts.map((c, i) => ({ id: `c${i + 1}`, text: c.text, check: 'llm', source: 'diagnosis', met: false, ...(c.needsNew ? { needsNew: true } : {}) }));
+  const para = paragraphs[paragraph - 1] ?? '';
+  if (kind === 'form' && findCliches([para]).length) items.push({ id: 'k1', text: NO_CLICHE_TEXT[lang](paragraph), check: 'noCliche', source: 'code', met: false });
+  if (!items.some((c) => c.needsNew)) items.push({ id: 'n1', text: NEEDS_NEW_TEXT[lang](paragraph, kind), check: 'llm', source: 'code', met: false, needsNew: true });
+  return items;
+}
+
 // 진단은 과제 정확히 3개 + 브리핑 3파트. 과제 순서는 코드가 루브릭으로 다시 세운다 (가장 낮은 축 먼저 — v2 decideTargetStage)
-export function parseDiagnosis(x: unknown, paragraphCount: number): Diagnosis {
+export function parseDiagnosis(x: unknown, paragraphs: readonly string[], lang: 'ko' | 'en' = 'ko'): Diagnosis {
+  const paragraphCount = paragraphs.length;
   const d = obj(x, 'diagnosis');
   const rubric = parseRubric(d.rubric);
   const strengths = text(d.strengths, MAX_STRENGTHS);
   const taskList = firstN(d.tasks, 3);
   if (!Array.isArray(taskList) || taskList.length !== 3) fail('diagnosis.tasks: 과제가 3개보다 적어요.');
-  const briefing = strList(firstN(d.briefing, 3), 'diagnosis.briefing', 3).map((b) => b.trim().slice(0, 600));
-  if (briefing.length !== 3) fail('diagnosis.briefing: 파트가 3개가 아니에요.');
+  const briefingRaw = firstN(d.briefing, 3);
+  if (!Array.isArray(briefingRaw) || briefingRaw.length !== 3 || !briefingRaw.every((b) => typeof b === 'string')) fail('diagnosis.briefing: 파트가 3개가 아니에요.');
+  const briefing = (briefingRaw as string[]).map((b) => b.trim().slice(0, 600));
   const raw = taskList.map((v, i) => {
     const t = obj(v, `diagnosis.tasks[${i}]`);
     // 글 범위를 벗어난 문단 번호는 실패 대신 범위 안으로 맞춘다 (모델 출력이라 보정한다)
     const paragraph = Math.min(Math.max(Math.round(num(t.paragraph, 'task.paragraph')), 1), paragraphCount);
     // 축을 모르면 맨 뒤로 (모델이 낸 순서는 지킨다)
-    const rank = isAxis(t.axis) ? axisRank(rubric, t.axis) : Number.MAX_SAFE_INTEGER;
+    const axis = isAxis(t.axis) ? t.axis : undefined;
+    const rank = axis ? axisRank(rubric, axis) : Number.MAX_SAFE_INTEGER;
+    const kind = oneOf(t.kind, KINDS, 'task.kind');
+    const doneWhen = clip(t.doneWhen, 'task.doneWhen', 300);
     return {
-      rank, i,
-      kind: oneOf(t.kind, KINDS, 'task.kind'),
-      paragraph,
+      rank, i, kind, paragraph, axis, doneWhen,
       keyword: clip(t.keyword, 'task.keyword', 60),
       goal: clip(t.goal, 'task.goal', 120),
-      doneWhen: clip(t.doneWhen, 'task.doneWhen', 300),
+      criteria: criteriaOf(t.criteria, doneWhen, kind, paragraph, paragraphs, lang),
       opener: clip(t.opener, 'task.opener', 300),
     };
   });
   const ordered = [...raw].sort((a, b) => a.rank - b.rank || a.i - b.i);
   const tasks: Task[] = ordered.map((t, i) => ({
-    id: `t${i + 1}`, order: (i + 1) as 1 | 2 | 3, kind: t.kind,
-    target: { paragraph: t.paragraph, keyword: t.keyword }, goal: t.goal, doneWhen: t.doneWhen, opener: t.opener,
-    status: 'pending', fromExemplar: false, turns: 0, edits: 0, experience: [], nudged: false,
+    id: `t${i + 1}`, order: (i + 1) as 1 | 2 | 3, kind: t.kind, axis: t.axis,
+    target: { paragraph: t.paragraph, keyword: t.keyword }, goal: t.goal, doneWhen: t.doneWhen, criteria: t.criteria, opener: t.opener,
+    status: 'pending', turns: 0, edits: 0, experience: [], nudged: false,
   }));
   return { tasks, briefing, rubric, strengths };
 }

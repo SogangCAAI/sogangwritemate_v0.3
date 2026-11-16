@@ -1,8 +1,9 @@
 // 클라이언트 요청 검사 — 본문·상태·글 맥락·대화 기록. 클라이언트가 보낸 상태를 그대로 믿지 않고 모양을 다시 세운다 (모르는 필드는 버림)
 import {
-  type CaCounts, type Lang, type Open, type SessionState, type Stage, type Task, type TaskKind, type TaskStatus,
+  type CaCounts, type Criterion, type Lang, type Open, type SessionState, type Stage, type Task, type TaskKind, type TaskStatus,
   PATTERNS,
 } from '../../state';
+import { RUBRIC_AXIS_KEYS } from '../../rubric';
 import { bool, fail, num, obj, oneOf, optNum, optStr, str, strList, ValidationError, type Obj } from './fields';
 
 export const LANGS: readonly Lang[] = ['ko', 'en'];
@@ -19,26 +20,44 @@ function count(x: unknown, name: string): number {
   return Number.isInteger(n) && n >= 0 ? n : fail(`${name}: 0 이상의 정수가 아니에요.`);
 }
 
+const CHECKS = ['llm', 'noCliche'] as const;
+const SOURCES = ['diagnosis', 'conclusion', 'code'] as const;
+
+function parseCriterion(x: unknown, i: number): Criterion {
+  const c = obj(x, `criteria[${i}]`);
+  return {
+    id: str(c.id, 'criterion.id', 20),
+    text: str(c.text, 'criterion.text', 300),
+    check: oneOf(c.check, CHECKS, 'criterion.check'),
+    source: oneOf(c.source, SOURCES, 'criterion.source'),
+    met: bool(c.met, 'criterion.met'),
+    ...(c.needsNew === undefined ? {} : { needsNew: bool(c.needsNew, 'criterion.needsNew') }),
+  };
+}
+
 function parseTask(x: unknown, i: number): Task {
   const t = obj(x, `tasks[${i}]`);
   const target = obj(t.target, `tasks[${i}].target`);
+  if (t.criteria !== undefined && (!Array.isArray(t.criteria) || t.criteria.length > 6)) fail('task.criteria: 목록이 아니거나 너무 길어요.');
   return {
     id: str(t.id, 'task.id', 40),
     order: oneOf(t.order as never, [1, 2, 3] as never[], 'task.order'),
     kind: oneOf(t.kind, KINDS, 'task.kind'),
     target: { keyword: optStr(target.keyword, 'task.keyword'), paragraph: num(target.paragraph, 'task.paragraph') },
+    axis: t.axis === undefined ? undefined : oneOf(t.axis, RUBRIC_AXIS_KEYS, 'task.axis'),
     goal: str(t.goal, 'task.goal', 300),
     doneWhen: str(t.doneWhen, 'task.doneWhen', 500),
+    // 2026-11-16에 더한 칸 — 예전 상태에는 없으니 빈 목록 (doneWhen 한 문장으로 판정)
+    criteria: t.criteria === undefined ? [] : (t.criteria as unknown[]).map(parseCriterion),
     opener: str(t.opener, 'task.opener', 400),
     status: oneOf(t.status, STATUSES, 'task.status'),
     evidence: optStr(t.evidence, 'task.evidence'),
-    fromExemplar: bool(t.fromExemplar, 'task.fromExemplar'),
+    // fromExemplar · exemplar(시범 문장)는 2026-11-16에 없앴다 — 예전 상태가 보내면 무시한다
     startedAt: optNum(t.startedAt, 'task.startedAt'),
     endedAt: optNum(t.endedAt, 'task.endedAt'),
     turns: num(t.turns, 'task.turns'),
     edits: num(t.edits, 'task.edits'),
     experience: strList(t.experience, 'task.experience', 50),
-    exemplar: optStr(t.exemplar, 'task.exemplar'),
     nudged: bool(t.nudged, 'task.nudged'),
   };
 }
@@ -53,6 +72,7 @@ function parseOpen(x: unknown): Open | null {
     part: optNum(o.part, 'open.part'),
     effect: o.effect === undefined ? undefined : oneOf(o.effect, ['startTask', 'moveOn', 'close'] as const, 'open.effect'),
     taskId: optStr(o.taskId, 'open.taskId'),
+    criteria: o.criteria === undefined ? undefined : strList(o.criteria, 'open.criteria', 3, 300),
   };
 }
 

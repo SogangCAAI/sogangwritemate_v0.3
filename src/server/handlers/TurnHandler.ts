@@ -36,8 +36,7 @@ export class TurnHandler extends Handler {
     }
 
     const o = TutoringSession.from(state).handle(judge, event);
-    const exemplar = activeTask(o.state)?.exemplar ?? '';
-    const unquoted = o.say ? missingQuotes(o.say, [...ctx.paragraphs, ctx.posting, exemplar]) : [];
+    const unquoted = o.say ? missingQuotes(o.say, [...ctx.paragraphs, ctx.posting]) : [];
     if (unquoted.length) console.warn('[turn] 글에 없는 인용:', unquoted);
 
     await this.store.saveTurn({

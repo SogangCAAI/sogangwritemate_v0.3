@@ -3,16 +3,19 @@
 자기소개서(한국어·영어)를 대화로 함께 고치는 튜터 챗봇. 20분 세션 = 진단이 고른 **과제 3개**를 차례로.
 대화 설계는 NCF 패턴(Moore & Arar 2019)을 따른다. 근거 문서: `제안 - v3 새로 짜기 (ponytail).md` · `제안 - NCF 패턴으로 대화 설계.md` · `대본 목업 - NCF 패턴 1차.md`.
 
-이번 판은 **텍스트 1차** — 음성은 아직 없다.
+음성은 브라우저 내장 음성 인식 + 서버 TTS(Google) — 연구실 lab-server로 바꿀 때 `src/client/voice/`만 교체한다.
 
 ## 한 턴
 
 ```
-학생 발화 ─▶ Haiku 1회 (tool: respond → move + reply + paraphrase/example + opens)
-         ─▶ next(state, judge, event)  상태·과제·종료는 코드만 옮긴다
-         ─▶ 결정적 검사 (2문장 상한 · 답 뒤 질문 떼기 · 인용 존재) ─▶ Supabase 저장
+학생 발화 ─▶ Haiku 1회 (tool: respond → move + reply + paraphrase/example + opens + criteria(A2.6일 때))
+         ─▶ TutoringSession(국면 클래스)  상태·과제·종료는 코드만 옮긴다
+         ─▶ 결정적 검사 (2문장 상한 · 이끄는 끝 질문 · 인용 존재) ─▶ Supabase 저장
 힌트 칩(뭐라고요/무슨 뜻이에요/예를 들면요/그만)은 라벨을 직접 보내 LLM 호출 0회.
-수정 저장 ─▶ (시범 문장 그대로면 0회) Haiku 재평가 1회 → better면 done
+수정 저장 ─▶ 과제의 완료 항목(체크리스트)마다 판정: 코드 항목(상투 표현)은 코드가, 나머지는 Haiku 1회
+         ─▶ 전부 충족이면 확인 질문("이 문단이 뭘 주장하고 뭐가 받쳐 주죠?") → 학생이 짚으면 done, 아니면 못 채운 항목이 힌트 (ARCHITECTURE.md 6절)
+튜터는 문장을 써 주지 않는다 — 막히면 틀 · 다른 사람의 예 · 학생 재료의 자리를 보여 준다 (비계)
+세션 끝   ─▶ Sonnet 요약 + 끝 글을 처음과 같은 5축 루브릭으로 재진단 (처음/끝 비교)
 ```
 
 ## 명령
@@ -27,7 +30,7 @@ npm run build
 npm run gold                  # 골드 29개를 실제 API로 1회 — next() 결과로 채점 (기본 .env: ../pre-dashboard_code/.env)
 ```
 
-Supabase: 새 프로젝트에서 `supabase/schema.sql` 실행. 서버만 service_role 키로 쓴다(RLS 켬, 정책 없음).
+Supabase: 새 프로젝트에서 `supabase/schema.sql` 실행, 이미 있는 DB는 `supabase/migrations/`를 차례로. 서버만 service_role 키로 쓴다(RLS 켬, 정책 없음).
 Netlify: 진단(Sonnet)이 10초를 넘을 수 있어 함수 시간 제한을 26초로 올려 둔다.
 
 ## 파일
@@ -35,19 +38,19 @@ Netlify: 진단(Sonnet)이 10초를 넘을 수 있어 함수 시간 제한을 26
 | 파일 | 하는 일 |
 |---|---|
 | `src/state.ts` | SessionState · Task · Judge · 이벤트 타입, 시간 예산 상수 |
-| `src/conversation/` | 대화 흐름 — `TutoringSession` + 국면 클래스(State 패턴): 13 라벨 · B4.4 · UNCLEAR 1/2/3 · 과제 전환 · 시간 제안 · 마무리. 지도: `FLOW.md` |
+| `src/conversation/` | 대화 흐름 — `TutoringSession` + 국면 클래스(State 패턴): 15 라벨 · B4.4 · UNCLEAR 1/2/3 · 막힘·다른 요청 · 과제 전환 · 시간 규칙 · 마무리. 지도: `FLOW.md` |
 | `src/decide.ts` | 예전 입구 `next()` — `TutoringSession`에 위임 (테스트·실험용) |
 | `src/lines.ts` | 코드가 직접 말하는 문장(ko/en) · 마무리 파트(과제 표에서만) |
 | `src/checks.ts` | 문장 상한 · 답 뒤 질문 떼기 · 인용 검사 · 시간 · 상투 표현 사전(v2 이식) |
 | `src/server/handlers/` | 함수 본문 클래스 (Diagnose · Turn · Evaluate · Summary · Tts) |
-| `src/server/services/` | `TurnResponder`(Haiku 한 번 + 길이 검사) · `Diagnoser` · `Evaluator` · `Summarizer` · `TtsService` |
+| `src/server/services/` | `TurnResponder`(Haiku 한 번 + 길이 검사) · `Diagnoser`(첫 진단 · 끝 재진단) · `Evaluator`(완료 항목 판정) · `Summarizer` · `TtsService` |
 | `src/server/llm/` | `LlmClient`(구조화된 출력, 시간 제한, 사용자용 오류) · `PromptBook` · `TurnPrompt` |
 | `src/server/parse/` | `RequestParser`(요청 본문·클라이언트 상태) · `LlmOutputParser`(모델 출력, 스키마는 `outputs/`) |
 | `src/server/store/` · `src/server/http/` | Supabase 저장(없으면 생략) · 응답 봉투 `{ok, data, error}` |
-| `src/prompts/*.md` | tutor.ko/en · diagnose · evaluate · summary |
+| `src/prompts/*.md` | tutor.ko/en · diagnose · rubric(진단·재진단 공용) · regrade · evaluate · summary |
 | `netlify/functions/` | `diagnose` (Sonnet) · `turn` (Haiku) · `evaluate` (Haiku) · `summary` (Sonnet) |
 | `src/client/` | Landing · Session(대화·칩·글 패널·과제 목록) · Summary(과제 표·처음/끝 글) · `SessionController` · `voice/`(TutorSpeaker · BargeInDetector · SpeechListener) |
-| `tests/` | `decide.test.ts` 목업 표 테스트 · `conversation.test.ts` 국면 · `sessionController.test.ts` · `checks` · `handlers` · `validate` |
+| `tests/` | `decide.test.ts` 목업 표 테스트 · `conversation.test.ts` 국면 · `criteria.test.ts` 완료 항목 · `ca.test.ts` · `sessionController.test.ts` · `checks` · `handlers` · `validate` |
 | `experiments/gold_eval.mjs` | 골드 29개를 v3 턴 경로로, 라벨이 아니라 `next()` 결과로 채점 |
 
 ## 다음 단계

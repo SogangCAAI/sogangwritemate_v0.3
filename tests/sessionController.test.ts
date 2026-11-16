@@ -8,7 +8,7 @@ import { parseRubric } from '../src/server/parse/LlmOutputParser';
 import { ESSAY, fresh, POSTING } from './fixture';
 
 const start = (): Start => ({
-  state: fresh(), say: fresh().last.played, awaitPause: true, posting: POSTING, paragraphs: ESSAY,
+  state: fresh(), say: fresh().last.played, awaitPause: true, posting: POSTING, resume: '', paragraphs: ESSAY,
   rubric: parseRubric({}), strengths: '',
 });
 

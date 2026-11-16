@@ -5,14 +5,16 @@ import { LlmError } from '../llm/LlmClient';
 import { ValidationError } from './fields';
 import { parseDiagnosis } from './outputs/diagnosis';
 import { parseJudge } from './outputs/judge';
+import { parseRegrade } from './outputs/regrade';
 import { parseSummary } from './outputs/summary';
 import { parseVerdict } from './outputs/verdict';
 
 export { ValidationError } from './fields';
 export { DIAGNOSE_TOOL, parseDiagnosis, parseRubric, type Diagnosis } from './outputs/diagnosis';
 export { parseJudge, TURN_TOOL } from './outputs/judge';
+export { parseRegrade, REGRADE_TOOL, type Regrade } from './outputs/regrade';
 export { parseSummary, SUMMARY_TOOL, type Summary } from './outputs/summary';
-export { EVALUATE_TOOL, parseVerdict } from './outputs/verdict';
+export { EVALUATE_TOOL, parseVerdict, type ItemJudgement, type RawVerdict } from './outputs/verdict';
 
 export class LlmOutputParser {
   // name은 사용자에게 보이는 꼬리표 (respond · diagnose · evaluate · summary)
@@ -31,7 +33,8 @@ export class LlmOutputParser {
   static judge(raw: unknown) { return LlmOutputParser.read('respond', raw, parseJudge); }
   static verdict(raw: unknown) { return LlmOutputParser.read('evaluate', raw, parseVerdict); }
   static summary(raw: unknown) { return LlmOutputParser.read('summary', raw, parseSummary); }
-  static diagnosis(raw: unknown, paragraphCount: number) {
-    return LlmOutputParser.read('diagnose', raw, (r) => parseDiagnosis(r, paragraphCount));
+  static regrade(raw: unknown) { return LlmOutputParser.read('regrade', raw, parseRegrade); }
+  static diagnosis(raw: unknown, paragraphs: readonly string[], lang: 'ko' | 'en') {
+    return LlmOutputParser.read('diagnose', raw, (r) => parseDiagnosis(r, paragraphs, lang));
   }
 }

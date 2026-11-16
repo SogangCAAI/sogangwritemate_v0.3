@@ -17,6 +17,8 @@ export interface DiagnoseResult extends TurnResult {
 export interface SummaryResult {
   report: string;
   nextSteps: string[];
+  finalRubric: Rubric | null; // 끝 글을 처음과 같은 루브릭으로 다시 매긴 것 — 재진단이 실패하면 null
+  finalStrengths: string;
 }
 
 interface Context { posting: string; paragraphs: readonly string[] }
@@ -30,11 +32,11 @@ export class ApiClient {
     return this.post('/api/turn', body);
   }
 
-  evaluate(body: { state: SessionState; paragraph: number; original: string; edited: string }): Promise<TurnResult> {
+  evaluate(body: { state: SessionState; paragraph: number; original: string; edited: string; context: Context }): Promise<TurnResult> {
     return this.post('/api/evaluate', body);
   }
 
-  summary(body: { state: SessionState; original: readonly string[]; final: readonly string[]; posting: string }): Promise<SummaryResult> {
+  summary(body: { state: SessionState; original: readonly string[]; final: readonly string[]; posting: string; resume?: string }): Promise<SummaryResult> {
     return this.post('/api/summary', body);
   }
 

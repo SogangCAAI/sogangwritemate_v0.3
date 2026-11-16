@@ -43,16 +43,23 @@ test('막힘 1회 → 모델이 단서 하나 + 같은 질문 (clue_up, A5.1)', 
   assert.equal(activeTask(o.state)?.id, 't1');
 });
 
-test('막힘 2회 → 모델이 시범 한 문장 (exemplar, P1.4), 시범 문장 기록', () => {
-  const o = say(inTask1(), [{ move: 'CONFUSED' }, { move: 'CONFUSED', judge: { exemplar: '예산표를 공유 시트로 만들었습니다.' } }]);
+test('막힘 2회 → 모델이 쓰는 법을 보여 준다 (scaffold, P1.4) — 문장을 써 주지 않는다', () => {
+  const o = say(inTask1(), [{ move: 'CONFUSED' }, { move: 'CONFUSED', judge: { reply: "이런 문장은 '언제·무엇을·그래서' 순서예요. 아까 시트 얘기는 '무엇을' 자리예요. '그래서'엔 뭐가 와요?" } }]);
   assert.equal(o.state.confusedStreak, 2);
-  assert.equal(o.agentAction, 'exemplar');
+  assert.equal(o.agentAction, 'scaffold');
   assert.equal(o.state.open?.pattern, 'P1.4');
-  assert.equal(task(o.state, 't1').exemplar, '예산표를 공유 시트로 만들었습니다.');
+  assert.equal(task(o.state, 't1').status, 'active');
 });
 
-test('막힘 3회 → 코드가 과제를 미루고(skipped, 학생이 막힘) 다음 과제 제안, 횟수 0', () => {
-  const o = say(inTask1(), [{ move: 'CONFUSED' }, { move: 'CONFUSED' }, { move: 'CONFUSED' }]);
+test('막힘 3회 → 자리를 하나씩 불러 준다 (assemble, A5.0)', () => {
+  const o = say(inTask1(), [{ move: 'CONFUSED' }, { move: 'CONFUSED' }, { move: 'CONFUSED', judge: { reply: '자, 첫 자리요 — 언제 일이었어요?' } }]);
+  assert.equal(o.state.confusedStreak, 3);
+  assert.equal(o.agentAction, 'assemble');
+  assert.equal(o.state.open?.pattern, 'A5.0');
+});
+
+test('막힘 4회 → 코드가 과제를 미루고(skipped, 학생이 막힘) 다음 과제 제안, 횟수 0', () => {
+  const o = say(inTask1(), [{ move: 'CONFUSED' }, { move: 'CONFUSED' }, { move: 'CONFUSED' }, { move: 'CONFUSED' }]);
   assert.equal(task(o.state, 't1').status, 'skipped');
   assert.equal(task(o.state, 't1').evidence, L.stuckEvidence);
   assert.equal(o.say, `${L.stuckMoveOn} ${L.proposeTask('1문단에 지원 이유 넣기')}`);
@@ -61,8 +68,8 @@ test('막힘 3회 → 코드가 과제를 미루고(skipped, 학생이 막힘) �
   assert.equal(o.agentAction, 'move_on:P1');
 });
 
-test('막힘 3회인데 남은 시간이 7분보다 적으면 다음 과제 대신 마무리 (시간 규칙 그대로)', () => {
-  const o = say(inTask1(), [{ move: 'CONFUSED', at: 14 }, { move: 'CONFUSED', at: 14 }, { move: 'CONFUSED', at: 14 }]);
+test('막힘 4회인데 남은 시간이 7분보다 적으면 다음 과제 대신 마무리 (시간 규칙 그대로)', () => {
+  const o = say(inTask1(), [{ move: 'CONFUSED', at: 14 }, { move: 'CONFUSED', at: 14 }, { move: 'CONFUSED', at: 14 }, { move: 'CONFUSED', at: 14 }]);
   assert.equal(o.state.stage, 'closing');
   assert.ok(o.say?.startsWith(L.stuckMoveOn));
   assert.equal(task(o.state, 't1').status, 'skipped');
@@ -73,7 +80,7 @@ test('막힘 횟수: 다른 수가 오면 0, 수리·못 알아들음은 건너�
   assert.equal(say(inTask1(), [{ move: 'CONFUSED' }, { move: 'USER_INQUIRY' }]).state.confusedStreak, 0);
   const skipped = say(inTask1(), [{ move: 'CONFUSED' }, { move: 'REPEAT_REQ' }, { move: 'UNCLEAR' }, { move: 'CONFUSED' }]);
   assert.equal(skipped.state.confusedStreak, 2);
-  assert.equal(skipped.agentAction, 'exemplar');
+  assert.equal(skipped.agentAction, 'scaffold');
 });
 
 test('과제가 없을 때(브리핑)는 사다리를 타지 않는다 — 모델이 풀어 말하고 브리핑은 열린 채', () => {
@@ -178,13 +185,14 @@ test('끼어들기 등급: 표본 5턴 미만은 none, 0.10 이상 some, 0.25 �
   assert.deepEqual(new Interruption({ bargeIns: 1, botTurns: 3 }).toLog(), { bargeIns: 1, botTurns: 3, rate: 0.333, level: 'none' });
 });
 
-test('짧게: 기본 2문장 → 1문장, 시범 턴 3 → 2 (시범 문장은 남는다)', () => {
+test('짧게: 기본 2문장 → 1문장, 뼈대 턴 4 → 3, 재료 불러 주기 3 → 2', () => {
   const three = '좋아요. 두 번째 문장이에요. 세 번째 문장이에요.';
   assert.equal(TurnResponder.tidy(j('ANSWER', { reply: three })).reply, '좋아요. 두 번째 문장이에요.');
   assert.equal(TurnResponder.tidy(j('ANSWER', { reply: three }), null, true).reply, '좋아요.');
-  assert.equal(TurnResponder.tidy(j('EXEMPLAR_REQ', { reply: three, opens: 'P1.4' }), null, true).reply, '좋아요. 두 번째 문장이에요.');
-  const stuckOnce = { ...inTask1(), confusedStreak: 1 };
-  assert.equal(TurnResponder.maxSentences(j('CONFUSED'), stuckOnce, false), 3); // 막힘 2회째 = 시범 턴
+  assert.equal(TurnResponder.tidy(j('EXEMPLAR_REQ', { reply: three, opens: 'P1.4' }), null, true).reply, three);
+  assert.equal(TurnResponder.maxSentences(j('EXEMPLAR_REQ'), inTask1(), false), 4);
+  assert.equal(TurnResponder.maxSentences(j('CONFUSED'), { ...inTask1(), confusedStreak: 1 }, false), 4); // 막힘 2회째 = 뼈대
+  assert.equal(TurnResponder.maxSentences(j('CONFUSED'), { ...inTask1(), confusedStreak: 2 }, false), 3); // 3회째 = 재료 불러 주기
   assert.equal(TurnResponder.maxSentences(j('CONFUSED'), inTask1(), false), 2);
 });
 
@@ -195,8 +203,10 @@ test('턴 프롬프트: 막힘 횟수 · 다른 요청 횟수 · 끼어들기 �
   assert.ok(!plain.includes('한 문장으로 짧게'));
   assert.ok(plain.includes('이번이 첫 요청이다'));
   assert.ok(p.system(inTask1(), ctx, true).includes('한 문장으로 짧게'));
-  assert.ok(p.system({ ...inTask1(), confusedStreak: 1 }, ctx).includes('시범 한 문장을 따옴표로'));
-  assert.ok(p.system({ ...inTask1(), confusedStreak: 2 }, ctx).includes('이 과제를 미루고'));
+  assert.ok(p.system({ ...inTask1(), confusedStreak: 1 }, ctx).includes('쓰는 법을 보여 준다'));
+  assert.ok(p.system({ ...inTask1(), confusedStreak: 2 }, ctx).includes('자리를 하나씩'));
+  assert.ok(p.system({ ...inTask1(), confusedStreak: 3 }, ctx).includes('이 과제를 미루고'));
+  assert.ok(p.system({ ...inTask1(), open: { pattern: 'A4', firstPair: 'q' } }, ctx).includes('확인 질문(A4)이 열려 있다'));
   assert.ok(p.system({ ...inTask1(), offGoalCount: 1 }, ctx).includes('학생 뜻을 따른다'));
   assert.ok(!p.system(inTask1(), ctx).includes('{{'));
 });

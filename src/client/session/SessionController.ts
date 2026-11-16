@@ -96,6 +96,7 @@ export class SessionController {
     try {
       const r = await this.api.evaluate({
         state: this.view.state, paragraph, original: this.start.paragraphs[paragraph - 1] ?? '', edited: text,
+        context: { posting: this.start.posting, paragraphs: this.view.paragraphs }, // 앞뒤 문단 참고용 (서버가 고친 문단을 바꿔 넣는다)
       });
       this.set({ paragraphs: this.view.paragraphs.map((p, i) => (i === paragraph - 1 ? text : p)) });
       this.apply(r);

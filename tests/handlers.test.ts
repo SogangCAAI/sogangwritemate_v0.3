@@ -34,15 +34,15 @@ test('turn: 칩으로 보낼 수 없는 라벨 · 깨진 상태는 400', async (
   assert.equal(broken.status, 400);
 });
 
-test('evaluate: 시범 문장 그대로면 재평가 없이 done', async () => {
+test('evaluate: 대상이 아닌 문단은 재평가 없이 그대로 (시범 문장 지름길은 없다)', async () => {
   let s = fresh();
   for (const ev of [{ kind: 'pause' }, { kind: 'pause' }, { kind: 'pause' }] as const) s = next(s, null, { ...ev, now: T0 }).state;
   s = next(s, j('ACCEPT'), { kind: 'say', text: '네', now: T0 }).state;
-  s = next(s, j('EXEMPLAR_REQ', { opens: 'P1.4', exemplar: '공유 시트로 예산을 지켰습니다.' }), { kind: 'say', text: '써 주세요', now: T0 }).state;
-  const r = await call(evaluate, { state: s, paragraph: 2, original: ESSAY[1], edited: `${ESSAY[1]} 공유 시트로 예산을 지켰습니다.` });
+  const r = await call(evaluate, { state: s, paragraph: 3, original: ESSAY[2], edited: `${ESSAY[2]} 더 씀.` });
   assert.equal(r.body.ok, true);
   assert.equal(r.body.data.verdict, null);
-  assert.equal(r.body.data.state.tasks[0].status, 'done');
+  assert.equal(r.body.data.state.tasks[0].status, 'active');
+  assert.equal(r.body.data.state.tasks[0].edits, 0);
 });
 
 test('turn: 끼어들기 집계는 선택 — 없으면 그대로, 틀린 모양은 400', async () => {

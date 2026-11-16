@@ -7,6 +7,7 @@ export interface SessionRow {
   id: string; lang: string; posting: string; essay: readonly string[]; tasks: unknown;
   final_essay?: readonly string[]; summary?: unknown; helped?: boolean | null; ended_at?: string;
   rubric?: unknown; // 첫 진단 {rubric, strengths} — 세션 시작 때만 쓴다
+  final_rubric?: unknown; // 끝 재진단 {rubric, strengths} — 세션 끝에만 쓴다 (실패하면 null)
 }
 
 export type TurnRow = {

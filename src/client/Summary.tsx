@@ -19,7 +19,7 @@ export function Summary({ start, state, final, onRestart }: Props) {
 
   useEffect(() => {
     let live = true;
-    api.summary({ state, original: start.paragraphs, final, posting: start.posting })
+    api.summary({ state, original: start.paragraphs, final, posting: start.posting, resume: start.resume })
       .then((r) => live && setSummary(r))
       .catch((e) => live && setError(errorText(e)));
     return () => { live = false; };
@@ -42,18 +42,32 @@ export function Summary({ start, state, final, onRestart }: Props) {
             {state.tasks.map((t) => (
               <tr key={t.id}>
                 <td><span className="sum-no">과제 {t.order}</span>{t.goal}</td>
-                <td><Stamp status={t.status} />{t.fromExemplar && <span className="sum-ex">시범 문장</span>}</td>
+                <td><Stamp status={t.status} /></td>
                 <td className="num">{mmss(taskTimeMs(t, now))}</td>
                 <td className="num">{t.turns}</td>
                 <td className="num">{t.edits}</td>
-                <td className="sum-ev">{t.evidence ?? '–'}</td>
+                <td className="sum-ev">
+                  {t.evidence ?? '–'}
+                  {t.criteria.length > 0 && (
+                    <ul className="crit-list sum-crit">
+                      {t.criteria.map((c) => <li key={c.id} className={c.met ? 'is-met' : ''}><span className="crit-mark" aria-hidden="true">{c.met ? '✓' : '○'}</span>{c.text}</li>)}
+                    </ul>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        <section className="sum-diag" aria-label="처음 진단">
-          <RubricCard rubric={start.rubric} strengths={start.strengths} open={false} />
+        {/* 5축 루브릭은 글 전체의 잣대 — 처음 글과 끝 글을 같은 잣대로 나란히 (과제 완료는 위 표의 항목으로 판정했다) */}
+        <section className="sum-diag" aria-label="처음 진단과 끝 진단">
+          <h2>처음과 끝, 같은 잣대로</h2>
+          <div className="diag-pair">
+            <RubricCard rubric={start.rubric} strengths={start.strengths} open kicker="처음 진단" intro={null} foot={null} idPrefix="first" />
+            {summary?.finalRubric
+              ? <RubricCard rubric={summary.finalRubric} strengths={summary.finalStrengths} open kicker="끝 진단" intro={null} foot={null} idPrefix="final" />
+              : <div className="diag diag-pending"><p className="pending">{summary ? '끝 진단을 받지 못했어요.' : '끝 글을 다시 살펴보고 있어요…'}</p></div>}
+          </div>
         </section>
 
         <section className="report" aria-live="polite" aria-labelledby="report-h">

@@ -35,17 +35,18 @@ const BRIEFED: Step[] = [
 const inTask1 = () => run(fresh(), BRIEFED).state;
 
 // 과제 1 끝 → 과제 2 시작
-const inTask2 = () =>
-  run(inTask1(), [
-    { edit: 2, after: '고침', verdict: { better: true, reason: '행동과 결과가 보여요.' } },
-    { pause: true }, { say: 'ACCEPT' },
-  ]).state;
+// 항목을 다 채운 편집 + 확인 질문(A4)에 맞게 답함 = 과제 완료 (2026-11-16: 설명으로 보여 줘야 끝난다)
+const DONE_T1: Step[] = [
+  { edit: 2, after: '고침', verdict: { done: true, met: ['c1', 'c2'], reason: '행동과 결과가 보여요.' } },
+  { say: 'ANSWER', text: '시트로 갈등을 풀었다는 거고, 둘째 문장이 받쳐요.', judge: { positive: true, reply: '맞아요.' } },
+];
+const inTask2 = () => run(inTask1(), [...DONE_T1, { pause: true }, { say: 'ACCEPT' }]).state;
 
 // 과제 1·2 끝 → 과제 3 시작
 const inTask3 = (at = 2) =>
   run(inTask2(), [
-    { say: 'EXEMPLAR_REQ', judge: { opens: 'P1.4', exemplar: '물류 지연을 줄이고 싶어 지원합니다.' } },
-    { edit: 1, after: '저는... 물류 지연을 줄이고 싶어 지원합니다.', verdict: null },
+    { edit: 1, after: '저는... 물류 지연을 줄이고 싶어 지원합니다.', verdict: { done: true, met: ['c1'], reason: '이유가 보여요.' } },
+    { say: 'ANSWER', text: '물류 지연을 줄이고 싶어서요.', judge: { positive: true, reply: '네.' } },
     { pause: true }, { say: 'ACCEPT', at, judge: { opens: 'A5.1', reply: '3문단 "열정을 가지고" 자리에 뭐가 들어가면 좋을까요?' } },
   ]).state;
 
@@ -105,41 +106,49 @@ const TABLE: Row[] = [
 
   // M4 수정 → 재평가 → 완료
   { id: 'M4-19 재평가 false → active 유지, reason이 힌트', given: inTask1,
-    steps: [{ edit: 2, after: '협업했습니다.', verdict: { better: false, reason: '공유 시트를 만든 것도 넣어 볼래요?' } }],
+    steps: [{ edit: 2, after: '협업했습니다.', verdict: { done: false, met: ['c1'], reason: '공유 시트를 만든 것도 넣어 볼래요?' } }],
     expect: ({ state, say }) => {
       assert.equal(task(state, 't1').status, 'active'); assert.equal(task(state, 't1').edits, 1);
       assert.equal(say, '공유 시트를 만든 것도 넣어 볼래요?'); assert.equal(state.open?.pattern, 'P1');
     } },
-  { id: 'M4-22 재평가 true → done, 수정 2회, 다음 질문 없이 쉼', given: inTask1,
-    steps: [{ edit: 2, after: 'a', verdict: { better: false, reason: '힌트' } }, { say: 'ACCEPT', text: '아 네.' },
-      { edit: 2, after: 'b', verdict: { better: true, reason: '직접 한 일과 결과가 둘 다 보여요.' } }],
-    expect: ({ state, say }) => {
-      assert.equal(task(state, 't1').status, 'done'); assert.equal(task(state, 't1').edits, 2);
-      assert.equal(say, `${L.better} 직접 한 일과 결과가 둘 다 보여요.`);
+  { id: 'M4-22 항목 전부 충족 → 아직 done 아님, 확인 질문(A4)을 연다', given: inTask1,
+    steps: [{ edit: 2, after: 'a', verdict: { done: false, met: ['c1'], reason: '힌트' } }, { say: 'ACCEPT', text: '아 네.' },
+      { edit: 2, after: 'b', verdict: { done: true, met: ['c1', 'c2'], reason: '직접 한 일과 결과가 둘 다 보여요.' } }],
+    expect: ({ state, say, agentAction }) => {
+      assert.equal(task(state, 't1').status, 'active'); assert.equal(task(state, 't1').edits, 2);
+      assert.deepEqual(task(state, 't1').criteria.map((c) => c.met), [true, true]);
+      assert.equal(say, `${L.allMet} ${L.checkQuestion(2)}`); assert.equal(state.open?.pattern, 'A4'); assert.equal(agentAction, 'A4.0');
+      assert.ok(!wantsPause(state));
+    } },
+  { id: 'A4 확인 질문에 주장·근거를 짚으면 done, 다음 질문 없이 쉼', given: inTask1, steps: DONE_T1,
+    expect: ({ state, say, agentAction }) => {
+      assert.equal(task(state, 't1').status, 'done'); assert.equal(say, '맞아요.'); assert.equal(agentAction, 'done:check');
       assert.equal(state.open, null); assert.ok(wantsPause(state));
     } },
+  { id: 'A4 확인 질문에 못 짚으면 힌트, 과제는 active 그대로 → 다시 고치면 확인 질문을 다시 연다', given: inTask1,
+    steps: [DONE_T1[0]!, { say: 'ANSWER', text: '음… 잘하는 개발자요?', judge: { positive: false, reply: '주장은 그건데, 그걸 보여 주는 문장은 어디 있어요?' } }],
+    expect: ({ state, say, agentAction }) => {
+      assert.equal(task(state, 't1').status, 'active'); assert.equal(agentAction, 'A4.1'); assert.equal(say, '주장은 그건데, 그걸 보여 주는 문장은 어디 있어요?');
+      const again = next(state, null, { kind: 'edit', paragraph: 2, after: 'c', verdict: { done: true, met: ['c1', 'c2'], reason: 'r' }, now: T0 });
+      assert.equal(again.state.open?.pattern, 'A4');
+    } },
+  { id: 'A4에 "모르겠어요"(CONFUSED)는 막힘 사다리로 — 단서 + 같은 질문', given: inTask1,
+    steps: [DONE_T1[0]!, { say: 'CONFUSED', text: '모르겠어요' }],
+    expect: ({ state, agentAction }) => { assert.equal(agentAction, 'clue_up'); assert.equal(task(state, 't1').status, 'active'); } },
   { id: 'M4-24 done 뒤 쉼 → 과제 2 제안', given: inTask1,
-    steps: [{ edit: 2, after: 'b', verdict: { better: true, reason: 'r' } }, { pause: true }],
+    steps: [...DONE_T1, { pause: true }],
     expect: ({ state, say }) => {
       assert.equal(say, L.proposeTask('1문단에 지원 이유 넣기')); assert.equal(state.open?.taskId, 't2');
     } },
   { id: '대상이 아닌 문단 편집은 판정하지 않는다', given: inTask1, steps: [{ edit: 3, after: 'x', verdict: null }],
     expect: ({ state, say }) => { assert.equal(say, null); assert.equal(task(state, 't1').edits, 0); } },
 
-  // M5 시범 문장 수락 — 재평가 없이 완료
-  { id: 'M5-28 시범 문장 그대로 → done(fromExemplar), 재평가 없음', given: inTask2,
-    steps: [{ say: 'EXEMPLAR_REQ', judge: { opens: 'P1.4', exemplar: '"물류 현장의 지연을 데이터로 줄이고 싶어 지원합니다."' } },
-      { say: 'ACCEPT', text: '이거 그대로 쓸게요.' },
-      { edit: 1, after: '저는 데이터로 문제를 해결합니다. 물류 현장의 지연을 데이터로 줄이고 싶어 지원합니다.', verdict: null }],
-    expect: ({ state, say }) => {
-      const t = task(state, 't2');
-      assert.equal(t.status, 'done'); assert.equal(t.fromExemplar, true); assert.equal(say, L.exemplarDone);
-    } },
-  { id: 'M5 시범 문장을 고쳐 넣으면 재평가로 간다', given: inTask2,
-    steps: [{ say: 'EXEMPLAR_REQ', judge: { opens: 'P1.4', exemplar: '물류 지연을 줄이고 싶어 지원합니다.' } }],
+  // M5 "써 주세요" — 문장을 써 주지 않고 쓰는 법을 보여 준다 (2026-11-16)
+  { id: 'M5-25 써 달라(EXEMPLAR_REQ) → 뼈대(P1.4)를 열고 과제는 그대로, 시범 문장 지름길 없음', given: inTask2,
+    steps: [{ say: 'EXEMPLAR_REQ', text: '하나 써 주시면 안 돼요?', judge: { reply: "이런 문장은 '왜 이 회사 · 왜 이 일' 순서예요. 아까 세미나 얘기를 하셨죠 — 그건 '왜 이 회사' 자리예요. 그럼 '왜 이 일'엔 뭐가 와요?" } }],
     expect: ({ state }) => {
-      assert.equal(editNeedsEval(state, 1, '물류 지연을 줄이고 싶어 지원합니다.'), false);
-      assert.equal(editNeedsEval(state, 1, '물류 지연을 꼭 줄이고 싶습니다.'), true);
+      assert.equal(state.open?.pattern, 'P1.4'); assert.equal(task(state, 't2').status, 'active');
+      assert.equal(editNeedsEval(state, 1, '저는 데이터로 문제를 해결합니다. 물류 현장의 지연을 데이터로 줄이고 싶어 지원합니다.'), true); // 어떤 편집이든 재평가
       assert.equal(editNeedsEval(state, 2, '아무거나'), false);
     } },
 
@@ -148,7 +157,7 @@ const TABLE: Row[] = [
     steps: [{ say: 'ANSWER', judge: { opens: 'P1', reply: 'R로 뭘 분석했는지로 바꾸면 어때요?' } }, { say: 'REJECT', text: '음… 근데 그건 수업 과제라 좀…' }],
     expect: ({ state }) => { assert.equal(task(state, 't3').status, 'active'); assert.equal(state.open, null); } },
   { id: 'P1.1 과제 시작 제안 거절 → 그 과제 skipped + 다음 후보', given: inTask1,
-    steps: [{ edit: 2, after: 'b', verdict: { better: true, reason: 'r' } }, { pause: true }, { say: 'REJECT', text: '그건 별로요.' }],
+    steps: [...DONE_T1, { pause: true }, { say: 'REJECT', text: '그건 별로요.' }],
     expect: ({ state }) => {
       assert.equal(task(state, 't2').status, 'skipped'); assert.equal(state.open?.taskId, 't3');
     } },
@@ -222,13 +231,13 @@ const TABLE: Row[] = [
   { id: '과제 1이 오래 걸려도(9분) 다음으로 넘기자고 하지 않는다', given: inTask1, steps: [{ say: 'ANSWER', at: 9 }],
     expect: ({ state, say }) => { assert.equal(say, '(모델 응답:ANSWER)'); assert.equal(activeTask(state)?.id, 't1'); assert.equal(state.open?.effect, undefined); } },
   { id: '과제를 끝냈을 때 남은 시간이 7분보다 적으면 다음 과제 대신 마무리', given: inTask1,
-    steps: [{ edit: 2, after: '고침', verdict: { better: true, reason: '행동과 결과가 보여요.' }, at: 14 }, { pause: true, at: 14 }],
+    steps: [{ ...DONE_T1[0]!, at: 14 }, { ...DONE_T1[1]!, at: 14 }, { pause: true, at: 14 }],
     expect: ({ state }) => {
       assert.equal(task(state, 't1').status, 'done'); assert.equal(task(state, 't2').status, 'pending');
       assert.equal(state.stage, 'closing');
     } },
   { id: '과제를 끝냈을 때 시간이 충분하면(남은 7분 이상) 과제 2를 제안', given: inTask1,
-    steps: [{ edit: 2, after: '고침', verdict: { better: true, reason: '행동과 결과가 보여요.' }, at: 12 }, { pause: true, at: 12 }],
+    steps: [{ ...DONE_T1[0]!, at: 12 }, { ...DONE_T1[1]!, at: 12 }, { pause: true, at: 12 }],
     expect: ({ state }) => { assert.equal(state.open?.effect, 'startTask'); assert.equal(state.open?.taskId, 't2'); } },
 
   // M11 마무리
@@ -252,7 +261,7 @@ const TABLE: Row[] = [
       assert.equal(next(state, j('ANSWER'), { kind: 'say', text: '2문단이요', now: T0 }).state.stage, 'ended');
     } },
   { id: '과제 셋 다 끝나면 쉼 뒤 마무리', given: () => inTask3(),
-    steps: [{ edit: 3, after: 'x', verdict: { better: true, reason: 'r' } }, { pause: true }],
+    steps: [{ edit: 3, after: 'x', verdict: { done: true, met: ['c1', 'c2'], reason: 'r' } }, { say: 'ANSWER', judge: { positive: true } }, { pause: true }],
     expect: ({ state }) => assert.equal(state.stage, 'closing') },
   { id: '끝난 세션은 움직이지 않는다', given: () => inTask3(),
     steps: [{ say: 'PRE_CLOSING' }, { say: 'ABORT' }, { say: 'ANSWER' }],

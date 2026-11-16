@@ -156,6 +156,13 @@ textarea:focus-visible, input:not([type='radio']):focus-visible { outline: none;
 .para-label { display: block; font-size: 12px; font-weight: 600; color: var(--ink); margin-bottom: var(--s1); }
 .para-crit { font-size: 13px; color: var(--ink-2); margin-bottom: var(--s2); }
 .para-crit b { font-weight: 600; margin-right: 6px; }
+/* 완료 항목 체크리스트 — 재평가가 본 ✓/○ */
+.crit-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; }
+.crit-list li { display: flex; gap: 6px; align-items: baseline; }
+.crit-list li.is-met { color: var(--grey); text-decoration: line-through; text-decoration-color: var(--rule); }
+.crit-mark { flex: none; width: 1em; font-weight: 700; color: var(--red); }
+.crit-list li.is-met .crit-mark { color: var(--ink); }
+.strip-progress { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--red); white-space: nowrap; }
 .para textarea {
   display: block; resize: none; field-sizing: content; min-height: 104px; overflow: hidden;
   font-family: var(--serif); font-size: 18px; line-height: 1.85; padding: var(--s2) var(--s3);
@@ -272,6 +279,12 @@ textarea:focus-visible, input:not([type='radio']):focus-visible { outline: none;
 .sum-no { display: block; font-size: 12px; font-weight: 700; color: var(--grey); letter-spacing: 0.04em; }
 .sum-ex { display: block; font-size: 12px; color: var(--grey); margin-top: 6px; }
 .sum-ev { color: var(--ink-2); font-size: 13px; max-width: 28rem; }
+.sum-crit { margin-top: var(--s2); font-size: 12px; }
+.sum-crit .crit-mark { color: var(--grey); }
+.diag-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: start; }
+.diag-pair .diag { max-width: none; margin-bottom: 0; }
+.diag-pending { padding: var(--s4) 0; }
+@media (max-width: 900px) { .diag-pair { grid-template-columns: 1fr; } }
 .summary .stamp-active { color: var(--ink); } /* 끝난 세션에는 지금 과제가 없다 — 빨강을 쓰지 않는다 */
 .report { max-width: 46rem; }
 .report-text { font-family: var(--serif); font-size: 17px; line-height: 1.85; color: var(--ink-2); }

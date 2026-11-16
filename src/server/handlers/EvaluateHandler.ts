@@ -20,11 +20,13 @@ export class EvaluateHandler extends Handler {
     if (!Number.isInteger(paragraph) || paragraph < 1) throw new ValidationError('paragraph: 문단 번호가 잘못됐어요.');
     const original = str(b.original, 'original');
     const edited = str(b.edited, 'edited');
+    // 지금 글 전체 (선택) — 연결·주장 축 과제의 재평가에 앞뒤 문단을 참고로 준다. 고친 문단은 edited로 바꿔 넣는다
+    const paragraphs = b.context === undefined ? [] : RequestParser.context(b.context).paragraphs.map((p, i) => (i === paragraph - 1 ? edited : p));
 
     const session = TutoringSession.from(state);
     const task = activeTask(state);
     const verdict: Verdict | null = task && session.editNeedsEval(paragraph, edited)
-      ? await this.evaluator.evaluate(task, original, edited, state.lang)
+      ? await this.evaluator.evaluate(task, original, edited, state.lang, paragraphs)
       : null;
 
     const o = session.onEdit({ kind: 'edit', paragraph, after: edited, verdict, now: Date.now() });

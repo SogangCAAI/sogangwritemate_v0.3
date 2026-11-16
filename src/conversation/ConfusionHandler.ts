@@ -5,8 +5,10 @@
 //   src/domain/dialogue/caJudge.ts  CA_ACTION_TABLE의 clue_up · exemplar · move_on 행 (notUnderstood.streak 1 / 2 / ≥3)
 //   src/domain/dialogue/dialogueState.ts  notUnderstood — 쉼·편집·수리는 세지 않고 건너뛴다(skip), 다른 수가 오면 끊긴다(clear)
 //   1회 clue_up  — 이요안 10/09 "한 번 더 설명" · 워크플로 R6 L1: 질문을 좁히는 단서 하나(빈칸·되받기, v2 proposeHeader) + 같은 질문 → 모델, opens=A5.1
-//   2회 exemplar — 허윤석·이요안 10/09 "모범답안 1개 시범": 시범 한 문장 → 모델, opens=P1.4 (대필 금지 — 한 문장까지)
-//   3회 move_on  — 사람 튜터 K20161108 t58 "보류하고 2번": 코드가 과제를 미루고(skipped, '학생이 막힘') 다음 과제 제안 (시간 규칙 그대로)
+//   2회 scaffold — (2026-11-16, 교사 원칙) 문장을 써 주지 않고 쓰는 법을 보여 준다: 틀("언제 · 무엇을 했다 · 그래서") + 다른 사람의 예 +
+//                  학생 재료를 어느 자리에 넣을지 → 모델, opens=P1.4. v2의 '모범답안 1개 시범'을 대신한다
+//   3회 assemble — 학생 재료를 튜터가 자리마다 불러 주고 학생이 받아 적게 한다 ("첫 자리엔 언제 일인지부터요. 언제였어요?") → 모델, opens=A5.0
+//   4회 move_on  — 사람 튜터 K20161108 t58 "보류하고 2번": 코드가 과제를 미루고(skipped, '학생이 막힘') 다음 과제 제안 (시간 규칙 그대로)
 //
 // v3에서 달라진 점: v2는 헤더 주입(+플래그)으로 모델에게 지시했다. v3는 같은 턴의 Haiku가 라벨과 말을 함께 내므로,
 // 모델이 맞는 칸의 말을 하도록 TurnPrompt가 지금 막힘 횟수를 알려 주고, 이 클래스는 상태만 정한다 (호출 추가 없음).
@@ -29,11 +31,12 @@ export class ConfusionHandler {
     if (!t) return { ...Say.model({ ...base, confusedStreak: 0 }, j, true), agentAction: 'clarify' };
     const n = this.s.confusedStreak + 1;
     if (n === 1) return { ...Say.model({ ...base, confusedStreak: 1 }, { ...j, opens: 'A5.1' }, false), agentAction: 'clue_up' };
-    if (n === 2) return { ...Say.model({ ...base, confusedStreak: 2 }, { ...j, opens: 'P1.4' }, false), agentAction: 'exemplar' };
+    if (n === 2) return { ...Say.model({ ...base, confusedStreak: 2 }, { ...j, opens: 'P1.4' }, false), agentAction: 'scaffold' };
+    if (n === 3) return { ...Say.model({ ...base, confusedStreak: 3 }, { ...j, opens: 'A5.0' }, false), agentAction: 'assemble' };
     return this.moveOn(base, t.id, now);
   }
 
-  // 세 번째 막힘 — 과제를 미루고 다음으로 (모델의 reply는 버리고 코드가 말한다)
+  // 네 번째 막힘 — 과제를 미루고 다음으로 (모델의 reply는 버리고 코드가 말한다)
   private moveOn(s: SessionState, id: string, now: number): Outcome {
     const L = lines(s.lang);
     const s1 = Tasks.skip({ ...s, confusedStreak: 0, open: null }, id, L.stuckEvidence, now);
