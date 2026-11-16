@@ -22,6 +22,9 @@ export function Session({ start, onFinish }: Props) {
         <button type="button" className="btn" onClick={finish}>{ended ? '요약 보기' : '세션 끝내기'}</button>
       </Masthead>
       <TaskStrip tasks={state.tasks} />
+      {start.saved === false && (
+        <p className="unsaved" role="status">이 세션은 기록이 저장되지 않아요 — 대화는 그대로 할 수 있어요. 관리자: <code>/api/health</code>에서 원인을 확인하세요.</p>
+      )}
       <main className="page">
         <EssayPanel
           paragraphs={paragraphs}

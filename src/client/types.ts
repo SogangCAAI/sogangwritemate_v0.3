@@ -12,6 +12,7 @@ export interface Start {
   paragraphs: readonly string[];
   rubric: Rubric; // 첫 진단의 채점 루브릭 — 세션·요약 화면이 보여 준다
   strengths: string;
+  saved?: boolean; // false면 기록이 남지 않는 세션 — 화면에 띠로 알린다
 }
 
 // 대화 기록 한 줄

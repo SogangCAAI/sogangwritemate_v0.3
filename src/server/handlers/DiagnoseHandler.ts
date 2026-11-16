@@ -22,9 +22,10 @@ export class DiagnoseHandler extends Handler {
     const session = TutoringSession.start({ id: randomUUID(), lang, tasks: d.tasks, briefing: d.briefing, now: Date.now() });
     const state = session.toState();
 
-    await this.store.saveSession({
+    // 세션 행이 없으면 이 뒤의 turns 저장이 전부 외래키로 실패한다 — 화면에 알리도록 saved를 돌려준다 (원인은 /api/health)
+    const saveError = await this.store.saveSession({
       id: state.id, lang, posting: ctx.posting, essay: ctx.paragraphs, tasks: state.tasks, rubric: { rubric: d.rubric, strengths: d.strengths },
     });
-    return ok({ state, say: state.last.played, awaitPause: session.wantsPause, rubric: d.rubric, strengths: d.strengths });
+    return ok({ state, say: state.last.played, awaitPause: session.wantsPause, rubric: d.rubric, strengths: d.strengths, saved: saveError === null });
   }
 }

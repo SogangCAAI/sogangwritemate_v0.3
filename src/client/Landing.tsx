@@ -35,7 +35,7 @@ export function Landing({ onStart }: { onStart: (s: Start) => void }) {
     setError('');
     try {
       const r = await api.diagnose({ lang, posting: posting.trim(), paragraphs, resume: resume.trim() || undefined });
-      onStart({ state: r.state, say: r.say ?? '', awaitPause: r.awaitPause, posting: posting.trim(), resume: resume.trim(), paragraphs, rubric: r.rubric, strengths: r.strengths });
+      onStart({ state: r.state, say: r.say ?? '', awaitPause: r.awaitPause, posting: posting.trim(), resume: resume.trim(), paragraphs, rubric: r.rubric, strengths: r.strengths, saved: r.saved });
     } catch (err) {
       setError(errorText(err));
       setBusy(false);

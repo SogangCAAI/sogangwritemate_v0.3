@@ -237,7 +237,7 @@ sogang-tutor-v3/
 │  │  ├─ phases/        Briefing · TaskProposal · Experience · Conclusion · Editing · Idle · Closing · Ended
 │  │  └─ RepairHandler.ts · ConfusionHandler.ts · OffGoalHandler.ts · Interruption.ts · Agenda.ts · Say.ts · Tasks.ts
 │  ├─ server/           서버 전용
-│  │  ├─ handlers/      DiagnoseHandler · TurnHandler · EvaluateHandler · SummaryHandler · TtsHandler
+│  │  ├─ handlers/      DiagnoseHandler · TurnHandler · EvaluateHandler · SummaryHandler · TtsHandler · HealthHandler(/api/health 배포 점검)
 │  │  ├─ http/Handler.ts      바탕 클래스: 오류 → 봉투 {ok, data, error}
 │  │  ├─ services/      TurnResponder(턴 + tidy) · Diagnoser · Evaluator · Summarizer · TtsService
 │  │  ├─ llm/           LlmClient(구조화된 출력 · thinking 끔) · TurnPrompt(prompts.ts 1장에 사실을 채우는 조립 — 글 없음)

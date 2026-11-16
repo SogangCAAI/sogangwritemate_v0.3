@@ -107,6 +107,8 @@ textarea:focus-visible, input:not([type='radio']):focus-visible { outline: none;
 .org { font-size: 12px; color: var(--grey); padding-left: var(--s5); border-left: 1px solid var(--rule); }
 .org b { font-weight: 600; color: var(--ink); }
 .mast-end { margin-left: auto; display: flex; align-items: center; gap: var(--s5); }
+.unsaved { margin: 0; padding: 8px 20px; font-size: 13px; color: var(--ink); background: var(--ev-warn-tint); border-bottom: 1px solid var(--rule); }
+.unsaved code { font-family: inherit; font-weight: 600; }
 .timer { font-size: 13px; color: var(--grey); display: flex; align-items: baseline; gap: 6px; }
 .timer b { font-size: 18px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
 .rules { border-top: 3px solid var(--ink); border-bottom: 1px solid var(--ink); height: 7px; }

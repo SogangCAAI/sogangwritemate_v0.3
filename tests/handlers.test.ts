@@ -51,3 +51,15 @@ test('turn: 끼어들기 집계는 선택 — 없으면 그대로, 틀린 모양
   const bad = await call(turn, { state: fresh(), context, event: { kind: 'pause' }, ca: { bargeIns: -1, botTurns: 5 } });
   assert.equal(bad.status, 400);
 });
+
+// ── /api/health 조언 — 비개발자가 읽는 한 줄 ──
+import { HealthHandler } from '../src/server/handlers/HealthHandler';
+
+test('health 조언: 환경 변수 없음 · 열 없음 · 정상', () => {
+  const env = { ANTHROPIC_API_KEY: true, SUPABASE_URL: true, SUPABASE_SERVICE_ROLE_KEY: true, GOOGLE_TTS_API_KEY: false };
+  const base = { configured: true, reachable: true, missing: [] as string[], sessions: 3, lastSessionAt: '2026-11-16T10:00:00Z', error: null };
+  assert.match(HealthHandler.advice(env, { ...base, configured: false, reachable: false, sessions: null, lastSessionAt: null })[0]!, /SUPABASE_URL/);
+  assert.match(HealthHandler.advice(env, { ...base, missing: ['sessions.final_rubric'] })[0]!, /sessions\.final_rubric.*migrations/);
+  assert.match(HealthHandler.advice({ ...env, ANTHROPIC_API_KEY: false }, base)[0]!, /ANTHROPIC_API_KEY/);
+  assert.match(HealthHandler.advice(env, base)[0]!, /정상 — 세션 3개/);
+});

@@ -12,6 +12,7 @@ export interface TurnResult {
 export interface DiagnoseResult extends TurnResult {
   rubric: Rubric;
   strengths: string;
+  saved?: boolean; // 세션 행이 Supabase에 저장됐나 — false면 이 세션의 턴 기록도 남지 않는다 (/api/health)
 }
 
 export interface SummaryResult {

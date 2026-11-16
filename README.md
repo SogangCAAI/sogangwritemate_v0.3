@@ -32,6 +32,11 @@ npm run gold                  # 골드 29개를 실제 API로 1회 — next() �
 ```
 
 Supabase: 새 프로젝트에서 `supabase/schema.sql` 실행, 이미 있는 DB는 `supabase/migrations/`를 차례로. 서버만 service_role 키로 쓴다(RLS 켬, 정책 없음).
+
+**기록이 안 남을 때** — 브라우저에서 `https://<사이트>/api/health`를 연다. 환경 변수가 있는지(이름만), Supabase 표·열이 다 있는지, 세션이 몇 개 쌓였는지와 **무엇을 하면 되는지** 한 줄이 나온다. 흔한 원인은 둘:
+1. Netlify 환경 변수에 `SUPABASE_URL`·`SUPABASE_SERVICE_ROLE_KEY`가 없다(또는 anon 키를 넣었다) → 넣고 다시 배포.
+2. `sessions` 표에 `rubric`(11/03)·`final_rubric`(11/16) 열이 없다 → Supabase SQL 편집기에서 `supabase/migrations/*.sql`을 날짜 순서로 실행. 열이 하나라도 없으면 세션 저장이 실패하고, 그 뒤 `turns`는 외래키 때문에 전부 실패해 **기록이 통째로 안 남는다**.
+세션 화면에도 저장이 안 된 세션이면 띠가 뜬다("이 세션은 기록이 저장되지 않아요").
 Netlify: 진단(Sonnet)이 10초를 넘을 수 있어 함수 시간 제한을 26초로 올려 둔다.
 
 ## 파일
@@ -44,12 +49,12 @@ Netlify: 진단(Sonnet)이 10초를 넘을 수 있어 함수 시간 제한을 26
 | **`src/prompts.ts`** | **모델이 읽는 글과 코드가 말하는 문장 전부 한 파일** (v2 `prompts.ts`와 같은 자리) — 0 공통 · 1 턴(ko/en · 다음 칸 · 덧붙임 줄 · 기록 문장) · 2 진단·재진단·루브릭 · 3 재평가 · 4 요약 · 5 코드가 말하는 줄. 맨 위에 고치는 법·목차·짝 표시. 고친 뒤 `npm test -- tests/prompts.test.ts`가 무엇이 바뀌었는지 보여 준다 (`tests/snapshots/prompts.md`) |
 | `src/lines.ts` | `prompts.ts` 5장 재수출 · 마무리 파트(과제 표에서만) |
 | `src/checks.ts` | 문장 상한 · 답 뒤 질문 떼기 · 인용 검사 · 시간 · 상투 표현 사전(v2 이식) |
-| `src/server/handlers/` | 함수 본문 클래스 (Diagnose · Turn · Evaluate · Summary · Tts) |
+| `src/server/handlers/` | 함수 본문 클래스 (Diagnose · Turn · Evaluate · Summary · Tts · Health) |
 | `src/server/services/` | `TurnResponder`(Haiku 한 번 + 길이 검사) · `Diagnoser`(첫 진단 · 끝 재진단) · `Evaluator`(완료 항목 판정) · `Summarizer` · `TtsService` |
 | `src/server/llm/` | `LlmClient`(구조화된 출력, 시간 제한, 사용자용 오류) · `TurnPrompt`(1장의 글에 사실을 채우는 조립) |
 | `src/server/parse/` | `RequestParser`(요청 본문·클라이언트 상태) · `LlmOutputParser`(모델 출력, 스키마는 `outputs/`) |
 | `src/server/store/` · `src/server/http/` | Supabase 저장(없으면 생략) · 응답 봉투 `{ok, data, error}` |
-| `netlify/functions/` | `diagnose` (Sonnet) · `turn` (Haiku) · `evaluate` (Haiku) · `summary` (Sonnet) |
+| `netlify/functions/` | `diagnose` (Sonnet) · `turn` (Haiku) · `evaluate` (Haiku) · `summary` (Sonnet) · `tts` · `health`(배포 점검) |
 | `src/client/` | Landing · Session(대화·칩·글 패널·과제 목록) · Summary(과제 표·처음/끝 글) · `SessionController` · `voice/`(TutorSpeaker · BargeInDetector · SpeechListener) |
 | `tests/` | `decide.test.ts` 목업 표 테스트 · `conversation.test.ts` 국면 · `criteria.test.ts` 완료 항목 · `prompts.test.ts` 프롬프트 스냅샷 · `llm.test.ts` thinking 끔 · `ca.test.ts` · `sessionController.test.ts` · `checks` · `handlers` · `validate` |
 | `experiments/gold_eval.mjs` | 골드 29개를 v3 턴 경로로, 라벨이 아니라 `next()` 결과로 채점 |
