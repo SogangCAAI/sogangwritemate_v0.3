@@ -51,7 +51,7 @@ Netlify: 진단(Sonnet)이 10초를 넘을 수 있어 함수 시간 제한을 26
 | `src/server/store/` · `src/server/http/` | Supabase 저장(없으면 생략) · 응답 봉투 `{ok, data, error}` |
 | `netlify/functions/` | `diagnose` (Sonnet) · `turn` (Haiku) · `evaluate` (Haiku) · `summary` (Sonnet) |
 | `src/client/` | Landing · Session(대화·칩·글 패널·과제 목록) · Summary(과제 표·처음/끝 글) · `SessionController` · `voice/`(TutorSpeaker · BargeInDetector · SpeechListener) |
-| `tests/` | `decide.test.ts` 목업 표 테스트 · `conversation.test.ts` 국면 · `criteria.test.ts` 완료 항목 · `prompts.test.ts` 프롬프트 스냅샷 · `ca.test.ts` · `sessionController.test.ts` · `checks` · `handlers` · `validate` |
+| `tests/` | `decide.test.ts` 목업 표 테스트 · `conversation.test.ts` 국면 · `criteria.test.ts` 완료 항목 · `prompts.test.ts` 프롬프트 스냅샷 · `llm.test.ts` thinking 끔 · `ca.test.ts` · `sessionController.test.ts` · `checks` · `handlers` · `validate` |
 | `experiments/gold_eval.mjs` | 골드 29개를 v3 턴 경로로, 라벨이 아니라 `next()` 결과로 채점 |
 
 ## 다음 단계

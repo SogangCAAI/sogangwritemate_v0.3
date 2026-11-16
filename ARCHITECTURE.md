@@ -172,13 +172,13 @@ v2와 다른 점: 중요도를 한 턴 늦게(배경 호출) 받지 않고 같�
 
 ## 7. LLM 호출 (`src/server/llm/LlmClient.ts`)
 
-| 호출 | 모델 | 생각 깊이(effort) | 시간 제한 | 출력 |
+| 호출 | 모델 | 생각 깊이(effort) · thinking | 시간 제한 | 출력 |
 |---|---|---|---|---|
-| 진단 | `claude-sonnet-5-5` | medium | 22초 | 루브릭 5축 · 잘한 점 · 과제 3개 · 브리핑 |
-| 턴 | `claude-haiku-5-5` | low | 12초 | 판정 + 튜터 말 |
-| 재평가 | `claude-haiku-5-5` | low | 12초 | {items[{id, met, evidence}], reason} — 코드 항목만이면 호출 없음 |
-| 요약 | `claude-sonnet-5-5` | medium | 22초 | {report, nextSteps} |
-| 끝 재진단 | `claude-sonnet-5-5` | medium | 22초 | 루브릭 5축 · 잘한 점 (요약과 나란히 호출) |
+| 진단 | `claude-sonnet-5-5` | medium · 끔(거절하면 adaptive) | 22초 | 루브릭 5축 · 잘한 점 · 과제 3개 · 브리핑 |
+| 턴 | `claude-haiku-5-5` | low · 끔 | 8초 | 판정 + 튜터 말 |
+| 재평가 | `claude-haiku-5-5` | low · 끔 | 8초 | {items[{id, met, evidence}], reason} — 코드 항목만이면 호출 없음 |
+| 요약 | `claude-sonnet-5-5` | medium · 끔(거절하면 adaptive) | 22초 | {report, nextSteps} |
+| 끝 재진단 | `claude-sonnet-5-5` | medium · 끔(거절하면 adaptive) | 22초 | 루브릭 5축 · 잘한 점 (요약과 나란히 호출) |
 | 튜터 목소리 | Google TTS `Chirp3-HD` (ko Autonoe · en Aoede) | — | 8초 | MP3 (`/api/tts`) |
 
 - 모두 **구조화된 출력**(`output_config.format` json_schema)으로 받는다. Sonnet 5.5는 강제 `tool_choice`를 받지 않기 때문이다. 스키마는 보내기 전에 `additionalProperties:false`로 닫고 지원 안 되는 `minItems/maxItems`를 뺀다 — 개수는 출력 파서(`src/server/parse/outputs/`)가 응답 뒤에 맞춘다.
@@ -240,7 +240,7 @@ sogang-tutor-v3/
 │  │  ├─ handlers/      DiagnoseHandler · TurnHandler · EvaluateHandler · SummaryHandler · TtsHandler
 │  │  ├─ http/Handler.ts      바탕 클래스: 오류 → 봉투 {ok, data, error}
 │  │  ├─ services/      TurnResponder(턴 + tidy) · Diagnoser · Evaluator · Summarizer · TtsService
-│  │  ├─ llm/           LlmClient(구조화된 출력) · TurnPrompt(prompts.ts 1장에 사실을 채우는 조립 — 글 없음)
+│  │  ├─ llm/           LlmClient(구조화된 출력 · thinking 끔) · TurnPrompt(prompts.ts 1장에 사실을 채우는 조립 — 글 없음)
 │  │  ├─ parse/         RequestParser(요청·상태) · LlmOutputParser + outputs/(스키마 + 파서) · fields(작은 검사, ValidationError)
 │  │  ├─ store/SessionStore.ts   Supabase 저장 (없으면 건너뜀)
 │  │  └─ deps.ts        부품 한 벌 조립
@@ -271,6 +271,7 @@ npx netlify-cli dev                        # 로컬 http://localhost:8888
 - 메아리: 튜터가 말하는 동안은 인식을 끄고(반이중), 끼어들기는 Chrome 메아리 제거가 걸린 마이크 소리 크기로 잡는다. 끼어든 첫 음절 일부는 인식이 다시 켜지기 전이라 놓칠 수 있다. 서버 TTS가 없으면(브라우저 음성) 메아리 제거가 약해 끼어들기 문턱을 높인다.
 - 판정 정확도는 지어낸 대본 기준이다. 사람 튜터 코퍼스의 실제 학생 발화로는 아직 재지 않았다.
 - 재평가는 한 번 호출이다. 항목별 절대 판정으로 바꿔(2026-11-16) 순서 편향은 없어졌지만, 항목 문장이 모호하면 흔들릴 수 있다 — 흔들리는 항목은 대본 목업으로 문장을 다듬는다.
+- **thinking은 끈다** (`LlmClient`, 2026-11-16): 5.5 모델은 기본이 적응형 thinking이고 그 토큰이 `max_tokens`에 들어 턴이 느려졌다 — v2가 10/27에 찾은 것(진단 출력의 59%가 thinking)과 같은 문제. Haiku(턴·재평가)는 `thinking: disabled`로 v2 실측 1.0~1.4초. Sonnet이 거절(400)하면 그 모델만 adaptive로 다시 부르고 기억한다 (Opus 5.5는 거절한다는 v2 기록). 전/후 실측: `npx tsx experiments/live_smoke.ts <.env>`.
 - 끝 재진단과 요약이 Sonnet 2회를 나란히 부른다 — Netlify 함수 시간 제한(26초) 안에 들어야 한다.
 - Netlify 함수 시간 제한을 26초로 올려야 진단(Sonnet)이 안전하다.
 - 1차 범위 밖 (NCF 문서 0절): 부분 반복·들음 확인·"잠깐만요"·퀴즈 흐름·화면 힌트 확장·영어 세션 실측.

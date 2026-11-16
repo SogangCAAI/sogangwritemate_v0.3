@@ -30,9 +30,14 @@ export class LlmError extends Error {
   }
 }
 
-// Netlify 동기 함수 상한(26초) 안에서 끝나도록
-const TIMEOUT_MS = { haiku: 12_000, sonnet: 22_000 };
-const THINKING_ROOM = 6000;
+// Netlify 동기 함수 상한(26초) 안에서 끝나도록. Haiku는 thinking을 끄면 1~2초(v2 실측 1.0~1.4초)라 8초면 충분하다
+const TIMEOUT_MS = { haiku: 8_000, sonnet: 22_000 };
+
+// thinking은 **끈다** (2026-11-16). 5.5 모델은 기본이 적응형 thinking이고 그 토큰이 max_tokens에 들어 느려진다 —
+// v2가 10/27에 같은 문제를 찾았다(진단 출력의 59%가 thinking, 22초 타임아웃). 판정·짧은 응답에는 생각이 필요 없다.
+// Opus 5.5는 disabled를 400으로 거절한다(v2 기록) — Sonnet도 거절하면 그 모델만 adaptive로 한 번 더 부르고 기억한다.
+type Thinking = 'disabled' | 'adaptive';
+const THINKING_ROOM = 6000; // adaptive로 돌아갈 때만 — 생각 토큰 몫을 출력 상한에 더한다
 const API_URL = 'https://api.anthropic.com/v1/messages';
 
 // 구조화된 출력은 모든 object에 additionalProperties:false를 요구하고 minItems 2 이상·maxItems를 받지 않는다.
@@ -49,14 +54,25 @@ export class LlmClient {
   // 키는 부를 때마다 읽는다 — 환경 변수를 나중에 싣는 실행(실험 스크립트)도 있다
   constructor(private readonly apiKey: () => string | undefined = () => process.env.ANTHROPIC_API_KEY) {}
 
+  // thinking을 끄지 못하는 모델(400) — 다음부터는 바로 adaptive로
+  private readonly adaptiveOnly = new Set<string>();
+
   async call(a: LlmCall): Promise<unknown> {
     const key = this.apiKey();
     if (!key) throw new LlmError('ANTHROPIC_API_KEY 없음', '서버 설정이 아직 안 됐어요. 관리자에게 알려 주세요.');
-    const res = await this.post(a, key);
+    const first: Thinking = this.adaptiveOnly.has(a.model) ? 'adaptive' : 'disabled';
+    const res = await this.post(a, key, first);
+    if (res.status === 400 && first === 'disabled') {
+      const body = (await res.text()).slice(0, 300);
+      if (!/thinking/i.test(body)) throw LlmClient.httpError(400, body);
+      console.warn(`[llm] ${a.model}은 thinking을 끄지 못한다 — adaptive로 다시 부른다: ${body}`);
+      this.adaptiveOnly.add(a.model);
+      return this.readJson(await this.post(a, key, 'adaptive'));
+    }
     return this.readJson(res);
   }
 
-  private async post(a: LlmCall, key: string): Promise<Response> {
+  private async post(a: LlmCall, key: string, thinking: Thinking): Promise<Response> {
     const isHaiku = a.model.includes('haiku');
     try {
       return await fetch(API_URL, {
@@ -64,8 +80,8 @@ export class LlmClient {
         headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
         // 강제 tool_choice는 Sonnet 5.5가 400으로 거절한다 — 구조화된 출력(json_schema)으로 모든 모델을 같은 길로
         body: JSON.stringify({
-          // 5.5 모델은 생각(thinking)이 늘 켜져 있고 그 토큰도 max_tokens에 든다 — 출력 상한에 생각 몫을 더한다
-          model: a.model, max_tokens: a.maxTokens + THINKING_ROOM, system: a.system,
+          model: a.model, max_tokens: a.maxTokens + (thinking === 'adaptive' ? THINKING_ROOM : 0), system: a.system,
+          thinking: { type: thinking },
           output_config: {
             effort: isHaiku ? 'low' : 'medium', // 대화 지연이 먼저 — 진단·요약만 한 단계 깊게
             format: { type: 'json_schema', schema: closed(a.tool.input_schema) },
@@ -81,13 +97,14 @@ export class LlmClient {
     }
   }
 
+  private static httpError(status: number, body: string): LlmError {
+    const busy = status === 429 || status === 529;
+    return new LlmError(`LLM HTTP ${status}: ${body}`,
+      busy ? '지금 요청이 많아요. 잠시 뒤 다시 보내 주세요.' : '튜터가 답을 만들지 못했어요. 다시 보내 주세요.');
+  }
+
   private async readJson(res: Response): Promise<unknown> {
-    if (!res.ok) {
-      const body = (await res.text()).slice(0, 300);
-      const busy = res.status === 429 || res.status === 529;
-      throw new LlmError(`LLM HTTP ${res.status}: ${body}`,
-        busy ? '지금 요청이 많아요. 잠시 뒤 다시 보내 주세요.' : '튜터가 답을 만들지 못했어요. 다시 보내 주세요.');
-    }
+    if (!res.ok) throw LlmClient.httpError(res.status, (await res.text()).slice(0, 300));
     const data = (await res.json()) as { stop_reason?: string; content?: { type: string; text?: string }[] };
     if (data.stop_reason === 'refusal') throw new LlmError('모델 거절(refusal)', '튜터가 이 요청에는 답하지 못해요. 다른 말로 다시 보내 주세요.');
     const text = data.content?.find((b) => b.type === 'text')?.text;
