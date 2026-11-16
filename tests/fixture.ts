@@ -16,7 +16,7 @@ export const crit = (id: string, text: string, check: Criterion['check'] = 'llm'
 
 const task = (id: string, order: 1 | 2 | 3, kind: Task['kind'], paragraph: number, keyword: string, goal: string, doneWhen: string, criteria: Criterion[]): Task => ({
   id, order, kind, target: { paragraph, keyword }, goal, doneWhen, criteria, opener: `${paragraph}문단 '${keyword}' 얘기예요. 떠오르는 경험이 있어요?`,
-  status: 'pending', turns: 0, edits: 0, experience: [], nudged: false,
+  status: 'pending', turns: 0, edits: 0, experience: [], nudged: false, notes: [], stuckCount: 0, check: { asked: 0, claimOk: false },
 });
 
 export const TASKS: Task[] = [

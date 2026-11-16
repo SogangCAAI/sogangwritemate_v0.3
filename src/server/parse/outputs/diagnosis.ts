@@ -41,8 +41,9 @@ export const DIAGNOSE_TOOL: Tool = {
           type: 'object',
           properties: {
             axis: { type: 'string', enum: [...RUBRIC_AXIS_KEYS] },
-            kind: { type: 'string', enum: ['content', 'form'] },
+            kind: { type: 'string', enum: ['content', 'form', 'structure'] },
             paragraph: { type: 'integer' },
+            paragraphs: { type: 'array', items: { type: 'integer' } },
             keyword: { type: 'string' },
             goal: { type: 'string' },
             criteria: {
@@ -52,7 +53,7 @@ export const DIAGNOSE_TOOL: Tool = {
             doneWhen: { type: 'string' },
             opener: { type: 'string' },
           },
-          required: ['axis', 'kind', 'paragraph', 'keyword', 'goal', 'criteria', 'doneWhen', 'opener'],
+          required: ['axis', 'kind', 'paragraph', 'paragraphs', 'keyword', 'goal', 'criteria', 'doneWhen', 'opener'],
         },
       },
       briefing: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'string' } },
@@ -123,7 +124,8 @@ function criteriaOf(raw: unknown, doneWhen: string, kind: Task['kind'], paragrap
   const items: Criterion[] = texts.map((c, i) => ({ id: `c${i + 1}`, text: c.text, check: 'llm', source: 'diagnosis', met: false, ...(c.needsNew ? { needsNew: true } : {}) }));
   const para = paragraphs[paragraph - 1] ?? '';
   if (kind === 'form' && findCliches([para]).length) items.push({ id: 'k1', text: NO_CLICHE_TEXT[lang](paragraph), check: 'noCliche', source: 'code', met: false });
-  if (!items.some((c) => c.needsNew)) items.push({ id: 'n1', text: NEEDS_NEW_TEXT[lang](paragraph, kind), check: 'llm', source: 'code', met: false, needsNew: true });
+  // 구조 과제(문장 이동·문단 삭제)는 새 내용을 요구하지 않는다 — 옮긴 문장은 원래 글에 있던 것이다
+  if (kind !== 'structure' && !items.some((c) => c.needsNew)) items.push({ id: 'n1', text: NEEDS_NEW_TEXT[lang](paragraph, kind), check: 'llm', source: 'code', met: false, needsNew: true });
   return items;
 }
 
@@ -141,7 +143,11 @@ export function parseDiagnosis(x: unknown, paragraphs: readonly string[], lang: 
   const raw = taskList.map((v, i) => {
     const t = obj(v, `diagnosis.tasks[${i}]`);
     // 글 범위를 벗어난 문단 번호는 실패 대신 범위 안으로 맞춘다 (모델 출력이라 보정한다)
-    const paragraph = Math.min(Math.max(Math.round(num(t.paragraph, 'task.paragraph')), 1), paragraphCount);
+    const clampP = (n: number) => Math.min(Math.max(Math.round(n), 1), paragraphCount);
+    const paragraph = clampP(num(t.paragraph, 'task.paragraph'));
+    // 손댈 수 있는 문단들 — 모델이 낸 것 + 주 문단. 구조 과제가 아니면 주 문단 하나로 둔다 (한 문단에 집중)
+    const extra = Array.isArray(t.paragraphs) ? t.paragraphs.filter((n): n is number => typeof n === 'number' && Number.isFinite(n)).map(clampP) : [];
+    const touched = [...new Set([paragraph, ...extra])].sort((a, b) => a - b);
     // 축을 모르면 맨 뒤로 (모델이 낸 순서는 지킨다)
     const axis = isAxis(t.axis) ? t.axis : undefined;
     const rank = axis ? axisRank(rubric, axis) : Number.MAX_SAFE_INTEGER;
@@ -149,6 +155,7 @@ export function parseDiagnosis(x: unknown, paragraphs: readonly string[], lang: 
     const doneWhen = clip(t.doneWhen, 'task.doneWhen', 300);
     return {
       rank, i, kind, paragraph, axis, doneWhen,
+      paragraphs: kind === 'structure' ? touched : [paragraph],
       keyword: clip(t.keyword, 'task.keyword', 60),
       goal: clip(t.goal, 'task.goal', 120),
       criteria: criteriaOf(t.criteria, doneWhen, kind, paragraph, paragraphs, lang),
@@ -158,8 +165,8 @@ export function parseDiagnosis(x: unknown, paragraphs: readonly string[], lang: 
   const ordered = [...raw].sort((a, b) => a.rank - b.rank || a.i - b.i);
   const tasks: Task[] = ordered.map((t, i) => ({
     id: `t${i + 1}`, order: (i + 1) as 1 | 2 | 3, kind: t.kind, axis: t.axis,
-    target: { paragraph: t.paragraph, keyword: t.keyword }, goal: t.goal, doneWhen: t.doneWhen, criteria: t.criteria, opener: t.opener,
-    status: 'pending', turns: 0, edits: 0, experience: [], nudged: false,
+    target: { paragraph: t.paragraph, keyword: t.keyword, ...(t.paragraphs.length > 1 ? { paragraphs: t.paragraphs } : {}) }, goal: t.goal, doneWhen: t.doneWhen, criteria: t.criteria, opener: t.opener,
+    status: 'pending', turns: 0, edits: 0, experience: [], nudged: false, notes: [], stuckCount: 0, check: { asked: 0, claimOk: false },
   }));
   return { tasks, briefing, rubric, strengths };
 }

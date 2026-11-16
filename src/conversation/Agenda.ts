@@ -1,6 +1,6 @@
 // 세션 진행표 — 여러 국면이 함께 쓰는 '다음으로 가기' 이동 (모두 코드가 말한다)
 //   A3 파트 넘기기 · 다음 과제 제안(P1) · 마무리 시작(C4.0) · 시간 제안(P1:moveOn / P1:close)
-import { activeTask, CLOSE_AT_LEFT_MS, NEXT_TASK_MIN_LEFT_MS, type Outcome, type SessionState } from '../state';
+import { activeTask, CLOSE_AT_LEFT_MS, inTaskStage, NEXT_TASK_MIN_LEFT_MS, type Outcome, type SessionState } from '../state';
 import { closingParts, lines } from '../lines';
 import { sessionLeftMs } from '../checks';
 import { Say } from './Say';
@@ -47,7 +47,7 @@ export class Agenda {
 
   // 과제 중에 남은 시간이 CLOSE_AT_LEFT_MS 이하인가 — 그러면 20분 전에 마무리를 시작한다
   static timeUp(s: SessionState, now: number): boolean {
-    return (s.stage === 'content' || s.stage === 'form') && sessionLeftMs(s, now) <= CLOSE_AT_LEFT_MS;
+    return inTaskStage(s.stage) && sessionLeftMs(s, now) <= CLOSE_AT_LEFT_MS;
   }
 
   // 시간이 다 됐다 — 제안하지 않고 마무리를 시작한다. 하던 과제는 timeout으로 남긴다

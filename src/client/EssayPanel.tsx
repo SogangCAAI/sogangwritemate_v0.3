@@ -13,6 +13,9 @@ interface Props {
   listenPaused: boolean; // 편집 때문에 듣기를 멈춘 상태 — 안내를 보인다
   onSave: (paragraph: number, text: string) => Promise<boolean>;
   onEditing: (editing: boolean) => void;
+  onInsert?: (after: number) => void; // 문단 더하기 (구조 과제) — after 뒤에 빈 문단
+  onDelete?: (paragraph: number) => void; // 비운 문단 지우기
+  canDelete?: (paragraph: number) => boolean;
   rubric?: Rubric; // 첫 진단 — 글 위에 튜터의 평가 카드로
   strengths?: string;
 }
@@ -41,15 +44,26 @@ function Checklist({ task }: { task: Task }) {
 
 const charCount = (ps: readonly string[]) => ps.reduce((sum, p) => sum + p.replace(/\s/g, '').length, 0);
 
-export function EssayPanel({ paragraphs, task, busy, listenPaused, onSave, onEditing, rubric, strengths = '' }: Props) {
+export function EssayPanel({ paragraphs, task, busy, listenPaused, onSave, onEditing, onInsert, onDelete, canDelete, rubric, strengths = '' }: Props) {
   const [drafts, setDrafts] = useState<readonly string[]>(paragraphs);
   const [open, setOpen] = useState<number | null>(null); // 과제 밖에서 고치는 문단 (1부터)
   const target = task?.target.paragraph;
+  const targets = task ? task.target.paragraphs ?? [task.target.paragraph] : []; // 구조 과제는 문단 여럿을 손댄다
 
   // 입력칸이 사라지면 blur가 오지 않을 수 있다 — 문단이 바뀔 때 포커스를 다시 확인한다
   useEffect(() => {
     if (!(document.activeElement instanceof HTMLTextAreaElement)) onEditing(false);
   }, [target, open, onEditing]);
+
+  // 문단을 더하거나 지워 개수가 바뀌면 초안을 다시 맞춘다 (번호가 밀리므로)
+  const count = paragraphs.length;
+  useEffect(() => { setDrafts(paragraphs); setOpen(null); }, [count]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const insertBtn = (after: number) => onInsert && (
+    <button type="button" className="link para-insert" disabled={busy} onClick={() => onInsert(after)} aria-label={`${after}문단 뒤에 문단 추가`}>
+      + 여기에 문단 추가
+    </button>
+  );
 
   const setDraft = (i: number, text: string) => setDrafts((ds) => paragraphs.map((p, j) => (j === i ? text : ds[j] ?? p)));
 
@@ -81,13 +95,16 @@ export function EssayPanel({ paragraphs, task, busy, listenPaused, onSave, onEdi
         const n = i + 1;
         const draft = drafts[i] ?? saved;
         const changed = draft.trim() !== saved;
-        const isTarget = n === target;
-        const editing = isTarget || open === n;
+        const isTarget = targets.includes(n);
+        const editing = isTarget || open === n || saved === ''; // 새로 더한 빈 문단은 바로 열린다
         const canSave = !busy && changed && draft.trim().length > 0;
+        const deletable = !!onDelete && draft.trim() === '' && (canDelete?.(n) ?? false);
 
         if (!editing) {
           return (
-            <div key={n} className="para">
+            <div key={n} className="para-wrap">
+            {n === 1 && insertBtn(0)}
+            <div className="para">
               <span className="folio" aria-hidden="true">{folio(n)}</span>
               <div className="para-body">
                 <p className="para-text" onClick={() => !busy && setOpen(n)}>{saved}</p>
@@ -96,18 +113,22 @@ export function EssayPanel({ paragraphs, task, busy, listenPaused, onSave, onEdi
                 </button>
               </div>
             </div>
+            {insertBtn(n)}
+            </div>
           );
         }
 
         return (
-          <div key={n} className={`para is-editing${isTarget ? ' is-target' : ''}`}>
+          <div key={n} className="para-wrap">
+          {n === 1 && insertBtn(0)}
+          <div className={`para is-editing${isTarget ? ' is-target' : ''}`}>
             <span className="folio" aria-hidden="true">{folio(n)}</span>
             <div className="para-body">
               <label htmlFor={`p${n}`} className="para-label">
                 <span className="sr-only">{n}문단, </span>
-                {isTarget ? `지금 고치는 문단 · 과제 ${task!.order}` : `${n}문단 고치는 중`}
+                {isTarget ? `지금 고치는 문단 · 과제 ${task!.order}` : saved === '' ? `${n}문단 (새 문단)` : `${n}문단 고치는 중`}
               </label>
-              {isTarget && <Checklist task={task!} />}
+              {n === target && <Checklist task={task!} />}
               <AutoTextarea
                 id={`p${n}`}
                 value={draft}
@@ -118,9 +139,14 @@ export function EssayPanel({ paragraphs, task, busy, listenPaused, onSave, onEdi
                 <button type="button" className="btn solid" disabled={!canSave} onClick={() => void save(n)}>
                   수정 저장
                 </button>
-                {!isTarget && (
+                {!isTarget && saved !== '' && (
                   <button type="button" className="btn" onClick={() => cancel(n)}>
                     취소
+                  </button>
+                )}
+                {deletable && (
+                  <button type="button" className="btn" disabled={busy} onClick={() => onDelete!(n)}>
+                    이 문단 지우기
                   </button>
                 )}
                 {listenPaused && (
@@ -130,6 +156,8 @@ export function EssayPanel({ paragraphs, task, busy, listenPaused, onSave, onEdi
                 )}
               </div>
             </div>
+          </div>
+          {insertBtn(n)}
           </div>
         );
       })}

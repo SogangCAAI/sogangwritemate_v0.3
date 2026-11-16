@@ -1,7 +1,7 @@
 // 세션 진행 — 화면 밖의 일: 턴·재평가 호출, 대화 기록, 튜터 말 읽어 주기, 쉼 이벤트를 보낼 때 고르기.
 // 상태는 서버가 들고 있지 않다: 매 턴 지금 상태를 보내고 새 상태를 받는다.
 // 화면 상태(SessionView)는 바뀔 때마다 새 객체로 바꿔 끼우고 구독자에게 알린다 (useSyncExternalStore).
-import type { CaCounts, SessionState } from '../../state';
+import type { CaCounts, SessionState, Task } from '../../state';
 import type { ApiClient, TurnResult } from '../ApiClient';
 import { errorText } from '../ApiClient';
 import type { Line, Start, StudentEvent } from '../types';
@@ -15,6 +15,7 @@ export interface SessionView {
   readonly state: SessionState;
   readonly log: readonly Line[];
   readonly paragraphs: readonly string[];
+  readonly origin: readonly (number | null)[]; // 지금 문단 i가 처음 글의 몇 번째였나 (0부터) — 새로 더한 문단은 null. 문단을 더하거나 지우면 번호가 밀린다
   readonly awaitPause: boolean; // 서버가 쉼 이벤트를 기다린다
   readonly busy: boolean;
   readonly error: string;
@@ -42,6 +43,7 @@ export class SessionController {
       state: start.state,
       log: start.say ? [{ who: 'tutor', text: start.say }] : [],
       paragraphs: start.paragraphs,
+      origin: start.paragraphs.map((_, i) => i),
       awaitPause: start.awaitPause,
       busy: false,
       error: '',
@@ -79,7 +81,7 @@ export class SessionController {
     try {
       const { state, paragraphs } = this.view;
       const ca = this.voice.ca?.() ?? { bargeIns: 0, botTurns: 0 }; // 자주 끼어들면 서버가 튜터 말을 한 문장으로 줄인다
-      this.apply(await this.api.turn({ state, context: { posting: this.start.posting, paragraphs }, history, event, ca }));
+      this.apply(await this.api.turn({ state, context: this.context(paragraphs), history, event, ca }));
     } catch (e) {
       this.set({ error: errorText(e) });
     } finally {
@@ -94,9 +96,11 @@ export class SessionController {
     this.inFlight = true;
     this.set({ busy: true, error: '' });
     try {
+      const originals = this.originals();
       const r = await this.api.evaluate({
-        state: this.view.state, paragraph, original: this.start.paragraphs[paragraph - 1] ?? '', edited: text,
-        context: { posting: this.start.posting, paragraphs: this.view.paragraphs }, // 앞뒤 문단 참고용 (서버가 고친 문단을 바꿔 넣는다)
+        state: this.view.state, paragraph, original: originals[paragraph - 1] ?? '', edited: text,
+        context: this.context(this.view.paragraphs), // 앞뒤 문단·이력서 참고용 (서버가 고친 문단을 바꿔 넣는다)
+        originals, // 처음 글을 지금 번호에 맞춰 (더한 문단은 '')
       });
       this.set({ paragraphs: this.view.paragraphs.map((p, i) => (i === paragraph - 1 ? text : p)) });
       this.apply(r);
@@ -108,6 +112,49 @@ export class SessionController {
       this.inFlight = false;
       this.set({ busy: false });
     }
+  }
+
+  // ── 문단 더하기·지우기 (구조 과제, 2026-11-16) — 서버 호출 없이 화면 상태와 과제의 문단 번호를 함께 민다 ──
+
+  // after 뒤에 빈 문단을 하나 넣는다 (0 = 맨 앞). 그 뒤 문단을 가리키던 과제·화제의 번호가 1씩 밀린다
+  insertParagraph(after: number): void {
+    if (this.inFlight || this.view.paragraphs.length >= 20) return;
+    const at = Math.max(0, Math.min(after, this.view.paragraphs.length));
+    const paragraphs = [...this.view.paragraphs.slice(0, at), '', ...this.view.paragraphs.slice(at)];
+    const origin = [...this.view.origin.slice(0, at), null, ...this.view.origin.slice(at)];
+    this.set({ paragraphs, origin, state: SessionController.shiftState(this.view.state, (n) => (n > at ? n + 1 : n)) });
+  }
+
+  // 빈 문단만 지운다. 과제가 가리키는 문단이면 지우지 않는다 (버튼도 막는다 — canDelete)
+  deleteParagraph(paragraph: number): void {
+    if (this.inFlight || !this.canDelete(paragraph)) return;
+    const i = paragraph - 1;
+    const paragraphs = this.view.paragraphs.filter((_, k) => k !== i);
+    const origin = this.view.origin.filter((_, k) => k !== i);
+    this.set({ paragraphs, origin, state: SessionController.shiftState(this.view.state, (n) => (n > paragraph ? n - 1 : n)) });
+  }
+
+  // 지울 수 있나 — 문단이 둘 이상이고, 끝나지 않은 과제가 가리키는 문단이 아닐 때 (비웠는지는 화면이 본다)
+  canDelete(paragraph: number): boolean {
+    if (this.view.paragraphs[paragraph - 1] === undefined || this.view.paragraphs.length <= 1) return false;
+    return !this.view.state.tasks.some((t) => t.status !== 'done' && t.status !== 'skipped' && (t.target.paragraphs ?? [t.target.paragraph]).includes(paragraph));
+  }
+
+  // 처음 글을 지금 문단 번호에 맞춰 (더한 문단은 '')
+  private originals(): string[] {
+    return this.view.origin.map((o) => (o === null ? '' : this.start.paragraphs[o] ?? ''));
+  }
+
+  private context(paragraphs: readonly string[]) {
+    return { posting: this.start.posting, paragraphs, resume: this.start.resume };
+  }
+
+  private static shiftState(s: SessionState, f: (n: number) => number): SessionState {
+    const task = (t: Task): Task => ({
+      ...t,
+      target: { ...t.target, paragraph: f(t.target.paragraph), ...(t.target.paragraphs ? { paragraphs: t.target.paragraphs.map(f) } : {}) },
+    });
+    return { ...s, tasks: s.tasks.map(task), topic: s.topic.paragraph === undefined ? s.topic : { ...s.topic, paragraph: f(s.topic.paragraph) } };
   }
 
   // 쉼을 보낼 때까지 기다릴 시간 (보내지 않을 때는 null):

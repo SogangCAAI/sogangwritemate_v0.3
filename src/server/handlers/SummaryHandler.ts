@@ -24,7 +24,7 @@ export class SummaryHandler extends Handler {
 
     const [summary, regrade] = await Promise.all([
       this.summarizer.summarize(state, original, final, now),
-      this.diagnoser.regrade({ posting, paragraphs: final }, state.lang, resume).catch((e: unknown): Regrade | null => {
+      this.diagnoser.regrade({ posting, paragraphs: final, resume }, state.lang, resume).catch((e: unknown): Regrade | null => {
         console.error('[summary] 끝 재진단 실패 — 요약만 돌려줍니다:', e instanceof Error ? e.message : e);
         return null;
       }),

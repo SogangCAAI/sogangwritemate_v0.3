@@ -1,6 +1,8 @@
 // 과제 표를 다루는 작은 연산 — 모두 새 상태를 돌려준다 (받은 상태는 그대로)
 import { activeTask, type Criterion, type Open, type SessionState, type Task, type TaskStatus, type Verdict } from '../state';
 
+const MAX_NOTES = 12;
+
 export class Tasks {
   static update(s: SessionState, id: string, patch: Partial<Task>): SessionState {
     return { ...s, tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) };
@@ -70,11 +72,35 @@ export class Tasks {
     return t.criteria.some((c) => c.source === 'conclusion');
   }
 
-  // 재평가 결과를 항목에 적는다 — met인 항목만 참, 나머지는 거짓 (학생이 지웠을 수도 있다)
+  // 재평가 결과를 항목에 적는다 — met인 항목만 참(근거 인용도 함께), 나머지는 거짓 (학생이 지웠을 수도 있다)
   static applyVerdict(s: SessionState, id: string, v: Verdict): SessionState {
     const t = Tasks.find(s, id);
     if (!t) return s;
-    return Tasks.update(s, id, { criteria: t.criteria.map((c) => ({ ...c, met: v.met.includes(c.id) })) });
+    return Tasks.update(s, id, {
+      criteria: t.criteria.map((c) => {
+        const met = v.met.includes(c.id);
+        const evidence = met ? v.evidence?.[c.id] ?? c.evidence : undefined;
+        return { ...c, met, ...(evidence ? { evidence } : {}) };
+      }),
+    });
+  }
+
+  // 이미 정해진 것을 기록한다 — 같은 말은 한 번만, 오래된 것부터 밀어낸다
+  static note(s: SessionState, id: string, text: string): SessionState {
+    const t = Tasks.find(s, id);
+    const line = text.trim();
+    if (!t || !line || t.notes.includes(line)) return s;
+    return Tasks.update(s, id, { notes: [...t.notes, line].slice(-MAX_NOTES) });
+  }
+
+  // 이 과제가 손댈 수 있는 문단들 (주 문단 포함)
+  static targets(t: Task): readonly number[] {
+    const all = t.target.paragraphs ?? [];
+    return all.includes(t.target.paragraph) ? all : [t.target.paragraph, ...all];
+  }
+
+  static isTarget(t: Task, paragraph: number): boolean {
+    return Tasks.targets(t).includes(paragraph);
   }
 
   // 아직 못 채운 항목

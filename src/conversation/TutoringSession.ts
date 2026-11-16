@@ -74,7 +74,7 @@ export class TutoringSession {
   // 학생이 대상 문단을 고쳤을 때 재평가(Haiku)를 불러야 하나 — 진행 중 과제의 대상 문단이면 언제나 (시범 문장 지름길은 2026-11-16에 없앴다)
   editNeedsEval(paragraph: number, _after: string): boolean {
     const t = activeTask(this.state);
-    return !!t && t.target.paragraph === paragraph;
+    return !!t && Tasks.isTarget(t, paragraph);
   }
 
   // 이벤트 하나 → 결과 하나 (decide.next()가 이것을 부른다)

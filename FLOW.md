@@ -34,9 +34,10 @@ stateDiagram-v2
   Conclusion --> Conclusion: REJECT → 모델이 고친 해석 (A2.6)
 
   Editing --> Editing: 편집, 항목 일부만 충족 → ✓/✗ 갱신 + 못 채운 항목 힌트 (A4.1)<br/>EXEMPLAR_REQ → 쓰는 법 보여 주기 (P1.4 뼈대)
-  Editing --> Check: 편집, 항목 전부 충족 → 확인 질문 (A4.0)
+  Editing --> Check: 편집, 항목 전부 충족 → 확인 질문 (A4.0, 과제당 두 번까지)
+  Editing --> Idle: 편집, 항목 전부 충족 · 이미 두 번 물었음 → done
   Check --> Idle: 주장·근거를 맞게 짚음 (positive) → done
-  Check --> Editing: 못 짚음 → 힌트 (A4.1), 다시 고치기
+  Check --> Editing: 못 짚음 → 힌트 (A4.1), 다시 고치기 (주장만 짚었으면 기록 — 다음엔 받침 문장만 묻는다)
 
   Experience --> Idle: ABORT → skipped
   Conclusion --> Idle: ABORT → skipped
@@ -72,8 +73,8 @@ stateDiagram-v2
 | 수 | 하는 일 | agentAction |
 |---|---|---|
 | CONFUSED ×1 (`ConfusionHandler`) | 모델이 질문을 좁히는 단서 하나 + 같은 질문 (`open=A5.1`), `confusedStreak=1` | clue_up |
-| CONFUSED ×2 | 모델이 쓰는 법을 보여 준다 — 틀 + 다른 사람의 예 + 학생 재료의 자리 (`open=P1.4`, 문장을 써 주지 않는다), `confusedStreak=2` | scaffold |
-| CONFUSED ×3 | 모델이 자리를 하나씩 불러 주고 학생이 채운다 (`open=A5.0`), `confusedStreak=3` | assemble |
+| CONFUSED ×2 | 모델이 쓰는 법을 보여 준다 — 틀 + 다른 사람의 예 + 학생 재료의 자리 (`open=P1.4`, 문장을 써 주지 않는다), `confusedStreak=2`. 답하지 못한 질문을 `notes`에 적는다. 재료 자체가 없으면(기억 안 남) 이력서·다른 문단의 재료로 결론을 다시 확인 (`open=A2.6`) | scaffold / swap |
+| CONFUSED ×3 | 모델이 자리를 하나씩 불러 주고 학생이 채운다 (`open=A5.0`), `confusedStreak=3` — 또는 재료 바꾸기 | assemble / swap |
 | CONFUSED ×4 | "이건 나중에 다시 봐요. 다음으로 넘어갈게요." (코드) — 과제 `skipped`(evidence '학생이 막힘') → `Agenda.proposeNext` (시간 규칙 그대로, 남은 7분 미만이면 마무리) | move_on:P1 / move_on:C4.0 |
 | CONFUSED (과제 없음 · 마무리) | 과제 없음: 모델이 풀어 말하고 열린 짝 유지 / 마무리: 그 국면의 답(성공 확인 부정 → C4.7) | clarify / 국면 |
 | OFF_GOAL, 요청 문단 = pending 과제이고 (`importance=higher` 또는 두 번째 이상 요청) (`OffGoalHandler`) | 지금 과제는 `pending`으로(들은 것·턴 수 유지), 요청한 과제 시작 + "좋아요, 그것부터 봐요. 하던 건 나중에 다시 해요. {opener}" (코드, `open=A5.1`) | sequence_student_first |
@@ -121,7 +122,7 @@ stateDiagram-v2
 - **NCF**: A4.1 힌트 · P1 제안 · P1.4 쓰는 법 보여 주기(뼈대) (과제 진행 중, 열린 짝이 없거나 P1·P1.4)
 - **튜터가 방금** (모델): "고쳐 보세요" · 표현 과제의 질문·힌트 · 뼈대(틀 + 다른 사람의 예 + 학생 재료의 자리) / (코드) 재평가 힌트. 문장을 써 주지 않는다 (2026-11-16)
 - 말에 대한 수는 모두 기본값 (`Phase`). 형식 과제는 고치기 전에 "무엇을 주장하고 무엇으로 받칠지"를 묻고 A2.6으로 합의한다 (`TurnPrompt`의 `form` 칸)
-- **`onEdit`** (어느 국면에서 와도 이 규칙): 대상 밖 문단 → 무시 · 항목 전부 충족(verdict.done) → **아직 done 아님**, "항목은 다 들어갔어요." + 확인 질문을 열어(`open=A4`) → CheckPhase · 일부만 → active, 항목 ✓/✗ 갱신, reason이 못 채운 항목의 힌트 (A4.1) · 재평가 없음 → 수정 횟수만. 판정 방식은 ARCHITECTURE.md 6절
+- **`onEdit`** (어느 국면에서 와도 이 규칙): 과제가 손대는 문단 밖(`Tasks.targets`) → 무시 · 항목 전부 충족(verdict.done) → **아직 done 아님**, "항목은 다 들어갔어요." + 확인 질문을 열어(`open=A4`) → CheckPhase (두 번째는 주장을 이미 짚었으면 받침 문장만, 세 번째부터는 묻지 않고 done) · 일부만 → active, 항목 ✓/✗ 갱신, reason이 못 채운 항목의 힌트 (A4.1), 같은 항목이면 `stuckCount`↑ · 재평가 없음 → 수정 횟수만. 판정 방식은 ARCHITECTURE.md 6절
 
 ### CheckPhase — `phases/CheckPhase.ts`
 - **NCF**: A4 Quiz (답을 알고 묻기) — 완료 직전 확인. "지금 N문단이 하고 싶은 말이 뭐고, 어느 문장이 그걸 받쳐 주죠?"

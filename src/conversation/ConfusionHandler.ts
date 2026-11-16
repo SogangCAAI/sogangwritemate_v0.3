@@ -8,6 +8,8 @@
 //   2회 scaffold — (2026-11-16, 교사 원칙) 문장을 써 주지 않고 쓰는 법을 보여 준다: 틀("언제 · 무엇을 했다 · 그래서") + 다른 사람의 예 +
 //                  학생 재료를 어느 자리에 넣을지 → 모델, opens=P1.4. v2의 '모범답안 1개 시범'을 대신한다
 //   3회 assemble — 학생 재료를 튜터가 자리마다 불러 주고 학생이 받아 적게 한다 ("첫 자리엔 언제 일인지부터요. 언제였어요?") → 모델, opens=A5.0
+//   재료 바꾸기(swap) — 학생이 "기억이 안 난다"처럼 그 재료 자체가 없다고 하면 2·3회에서 모델이 이력서·다른 문단의 후보를 짚고 결론을
+//                  다시 확인한다(opens=A2.6 → 항목 갱신). 어느 쪽인지는 모델이 고른다 (TurnPrompt confused1/2)
 //   4회 move_on  — 사람 튜터 K20161108 t58 "보류하고 2번": 코드가 과제를 미루고(skipped, '학생이 막힘') 다음 과제 제안 (시간 규칙 그대로)
 //
 // v3에서 달라진 점: v2는 헤더 주입(+플래그)으로 모델에게 지시했다. v3는 같은 턴의 Haiku가 라벨과 말을 함께 내므로,
@@ -30,10 +32,12 @@ export class ConfusionHandler {
     const t = activeTask(this.s);
     if (!t) return { ...Say.model({ ...base, confusedStreak: 0 }, j, true), agentAction: 'clarify' };
     const n = this.s.confusedStreak + 1;
+    // 두 번째부터는 "이 질문에는 답하지 못했다"를 기록해 같은 재료를 다시 묻지 않게 한다 (재료 바꾸기의 근거)
+    const s2 = n >= 2 && this.s.open ? Tasks.note(base, t.id, `학생이 답하지 못한 질문: ${this.s.open.firstPair}`) : base;
     if (n === 1) return { ...Say.model({ ...base, confusedStreak: 1 }, { ...j, opens: 'A5.1' }, false), agentAction: 'clue_up' };
-    if (n === 2) return { ...Say.model({ ...base, confusedStreak: 2 }, { ...j, opens: 'P1.4' }, false), agentAction: 'scaffold' };
-    if (n === 3) return { ...Say.model({ ...base, confusedStreak: 3 }, { ...j, opens: 'A5.0' }, false), agentAction: 'assemble' };
-    return this.moveOn(base, t.id, now);
+    if (n === 2) return { ...Say.model({ ...s2, confusedStreak: 2 }, { ...j, opens: j.opens === 'A2.6' ? 'A2.6' : 'P1.4' }, false), agentAction: j.opens === 'A2.6' ? 'swap' : 'scaffold' };
+    if (n === 3) return { ...Say.model({ ...s2, confusedStreak: 3 }, { ...j, opens: j.opens === 'A2.6' ? 'A2.6' : 'A5.0' }, false), agentAction: j.opens === 'A2.6' ? 'swap' : 'assemble' };
+    return this.moveOn(s2, t.id, now);
   }
 
   // 네 번째 막힘 — 과제를 미루고 다음으로 (모델의 reply는 버리고 코드가 말한다)

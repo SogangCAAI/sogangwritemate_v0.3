@@ -21,6 +21,7 @@ const KO = {
   abortBriefing: '네, 바로 시작할게요.',
   allMet: '항목은 다 들어갔어요.',
   checkQuestion: (p: number) => `마지막으로 하나만요 — 지금 ${p}문단이 하고 싶은 말이 뭐고, 어느 문장이 그걸 받쳐 주죠?`, // 완료 직전 확인 (A4)
+  checkSupport: (p: number) => `주장은 아까 짚었죠. ${p}문단에서 그 주장을 받쳐 주는 문장은 어느 거예요?`, // 두 번째 확인 — 빠진 반쪽만
   better: '좋아졌어요.',
   tryAgain: '완료 기준을 다시 보면서 한 번 더 고쳐 볼래요?',
   codeHint: (item: string) => `아직 이게 남았어요: ${item}. 한 번 더 고쳐 볼래요?`, // 코드만 판정한 턴의 힌트
@@ -52,6 +53,7 @@ const EN: typeof KO = {
   abortBriefing: "Okay, let's get started.",
   allMet: 'Every item is in.',
   checkQuestion: (p: number) => `One last thing — what is paragraph ${p} claiming now, and which sentence backs it up?`,
+  checkSupport: (p: number) => `You named the claim earlier. Which sentence in paragraph ${p} backs it up?`,
   better: "That's better.",
   tryAgain: 'Check the criterion again and try one more edit?',
   codeHint: (item: string) => `One thing is still left: ${item}. Want to try once more?`,

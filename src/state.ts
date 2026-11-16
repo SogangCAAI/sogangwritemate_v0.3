@@ -8,7 +8,11 @@ export type Lang = 'ko' | 'en';
 // 첫 진단의 평가(채점 루브릭)는 src/rubric.ts — 턴마다 오가는 상태에는 넣지 않는다 (화면만 들고 있다)
 
 // 'ended'는 문서에 없다 — 성공 확인(C4.6)이 끝났다는 표시가 따로 필요해서 더했다
-export type Stage = 'opening' | 'briefing' | 'content' | 'form' | 'closing' | 'ended';
+export type Stage = 'opening' | 'briefing' | 'content' | 'form' | 'structure' | 'closing' | 'ended';
+
+// 과제 진행 중인 단계인가 (단계 이름 = 과제 종류)
+export const TASK_STAGES: readonly Stage[] = ['content', 'form', 'structure'];
+export const inTaskStage = (stage: Stage): boolean => TASK_STAGES.includes(stage);
 
 export const MOVES = [
   'ANSWER', 'CONTINUER', 'ACCEPT', 'REJECT', 'EXEMPLAR_REQ',
@@ -52,7 +56,8 @@ export interface Open {
 }
 
 export type TaskStatus = 'pending' | 'active' | 'done' | 'skipped' | 'timeout';
-export type TaskKind = 'content' | 'form';
+// content = 학생 경험을 새로 꺼내 넣기 · form = 있는 글을 고쳐 쓰기 · structure = 문장 이동·문단 추가·삭제 (문단 여럿, 새 내용을 요구하지 않는다, 2026-11-16)
+export type TaskKind = 'content' | 'form' | 'structure';
 
 // 과제 완료 항목 — 고친 문단 하나를 보고 "보인다 / 안 보인다"로 판정할 수 있는 관찰 항목 (2026-11-16, 체크리스트화)
 //   check: 'llm' = 재평가(Haiku)가 본다 · 'noCliche' = 코드가 본다 (상투 표현 사전, checks.ts)
@@ -66,6 +71,7 @@ export interface Criterion {
   readonly check: CriterionCheck;
   readonly source: CriterionSource;
   readonly met: boolean; // 마지막 재평가에서 충족했나
+  readonly evidence?: string; // 충족으로 본 근거 구절 (재평가가 인용) — 확인 질문 때 모델이 글을 다시 평가하지 않게 보여 준다
   readonly needsNew?: boolean; // 원래 문단에 없던 정보(경험·이유·사실·연결)를 요구하는 항목 — 근거 인용이 원문에 이미 있으면 충족이 아니다
 }
 
@@ -73,7 +79,7 @@ export interface Task {
   readonly id: string;
   readonly order: 1 | 2 | 3;
   readonly kind: TaskKind;
-  readonly target: { readonly keyword?: string; readonly paragraph: number }; // paragraph는 1부터
+  readonly target: { readonly keyword?: string; readonly paragraph: number; readonly paragraphs?: readonly number[] }; // paragraph는 1부터 (주 문단). paragraphs = 이 과제가 손댈 수 있는 문단 전부 (구조 과제: 옮길 곳·지울 곳, 주 문단 포함)
   readonly axis?: RubricAxisKey; // 이 과제가 나온 루브릭 축 — 연결·주장 축은 재평가 때 앞뒤 문단을 함께 본다
   readonly goal: string; // 학생에게 보여 줄 짧은 명사구 ("2문단에 협업 경험 넣기")
   readonly doneWhen: string; // 완료 기준 한 문장 요약 (화면·프롬프트용). 판정은 criteria로 한다
@@ -86,6 +92,12 @@ export interface Task {
   readonly turns: number;
   readonly edits: number;
   readonly experience: readonly string[]; // 학생 답 원문 (A5.1/A5.5)
+  // ── 돌지 않기 위한 기억 (2026-11-16) ──
+  readonly notes: readonly string[]; // 이미 정해진 것 — 결론 확정 · 학생이 답하지 못한 질문 · 확인 질문에서 맞게 짚은 것. 프롬프트에 "다시 묻지 않는다"로 들어간다
+  readonly lastHint?: string; // 직전 재평가 힌트 — 같은 힌트를 되풀이하지 않게 재평가에 넘긴다
+  readonly stuckOn?: string; // 직전 재평가에서 못 채운 항목 id 묶음 (같으면 stuckCount가 오른다)
+  readonly stuckCount: number; // 같은 항목이 연달아 안 채워진 횟수 — 2: 뼈대 · 3: 다른 재료(이력서·다른 문단)
+  readonly check: { readonly asked: number; readonly claimOk: boolean }; // 확인 질문(A4)을 몇 번 했나, 주장은 맞게 짚었나 — 두 번째는 빠진 반쪽만, 세 번째부터는 묻지 않는다
   readonly nudged: boolean; // 시간 초과 제안을 이미 했나
 }
 
@@ -130,6 +142,7 @@ export interface Verdict {
   readonly done: boolean;
   readonly met: readonly string[]; // 충족한 항목 id (criteria가 비어 있으면 done일 때 ['doneWhen'])
   readonly reason: string; // 튜터가 학생에게 그대로 말할 문장 — done이면 칭찬, 아니면 못 채운 항목에 대한 힌트 하나
+  readonly evidence?: Readonly<Record<string, string>>; // 충족 항목의 근거 인용 (id → 구절)
 }
 
 export type TurnEvent =

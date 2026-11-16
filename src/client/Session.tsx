@@ -12,7 +12,7 @@ import { VoicePanel } from './VoicePanel';
 interface Props { start: Start; onFinish: (s: SessionState, final: readonly string[]) => void }
 
 export function Session({ start, onFinish }: Props) {
-  const { view, voice, now, ended, draft, setDraft, editing, setEditing, finish, say, saveEdit } = useSession(start, onFinish);
+  const { view, voice, now, ended, draft, setDraft, editing, setEditing, finish, say, saveEdit, insertParagraph, deleteParagraph, canDelete } = useSession(start, onFinish);
   const { state, log, paragraphs, busy, error } = view;
 
   return (
@@ -30,6 +30,9 @@ export function Session({ start, onFinish }: Props) {
           listenPaused={editing && voice.held}
           onSave={saveEdit}
           onEditing={setEditing}
+          onInsert={insertParagraph}
+          onDelete={deleteParagraph}
+          canDelete={canDelete}
           rubric={start.rubric}
           strengths={start.strengths}
         />

@@ -7,11 +7,11 @@ import { RUBRIC_AXIS_KEYS } from '../../rubric';
 import { bool, fail, num, obj, oneOf, optNum, optStr, str, strList, ValidationError, type Obj } from './fields';
 
 export const LANGS: readonly Lang[] = ['ko', 'en'];
-export const KINDS: readonly TaskKind[] = ['content', 'form'];
-const STAGES: readonly Stage[] = ['opening', 'briefing', 'content', 'form', 'closing', 'ended'];
+export const KINDS: readonly TaskKind[] = ['content', 'form', 'structure'];
+const STAGES: readonly Stage[] = ['opening', 'briefing', 'content', 'form', 'structure', 'closing', 'ended'];
 const STATUSES: readonly TaskStatus[] = ['pending', 'active', 'done', 'skipped', 'timeout'];
 
-export interface Context { posting: string; paragraphs: string[] }
+export interface Context { posting: string; paragraphs: string[]; resume: string }
 export interface Line { who: 'tutor' | 'student'; text: string }
 
 // 0 이상의 정수
@@ -31,8 +31,19 @@ function parseCriterion(x: unknown, i: number): Criterion {
     check: oneOf(c.check, CHECKS, 'criterion.check'),
     source: oneOf(c.source, SOURCES, 'criterion.source'),
     met: bool(c.met, 'criterion.met'),
+    ...(c.evidence === undefined ? {} : { evidence: str(c.evidence, 'criterion.evidence', 400) }),
     ...(c.needsNew === undefined ? {} : { needsNew: bool(c.needsNew, 'criterion.needsNew') }),
   };
+}
+
+function numList(x: unknown, name: string): number[] {
+  if (!Array.isArray(x) || x.length > 20) fail(`${name}: 목록이 아니거나 너무 길어요.`);
+  return x.map((v, i) => num(v, `${name}[${i}]`));
+}
+
+function parseCheck(x: unknown): Task['check'] {
+  const c = obj(x, 'task.check');
+  return { asked: count(c.asked, 'task.check.asked'), claimOk: bool(c.claimOk, 'task.check.claimOk') };
 }
 
 function parseTask(x: unknown, i: number): Task {
@@ -43,7 +54,10 @@ function parseTask(x: unknown, i: number): Task {
     id: str(t.id, 'task.id', 40),
     order: oneOf(t.order as never, [1, 2, 3] as never[], 'task.order'),
     kind: oneOf(t.kind, KINDS, 'task.kind'),
-    target: { keyword: optStr(target.keyword, 'task.keyword'), paragraph: num(target.paragraph, 'task.paragraph') },
+    target: {
+      keyword: optStr(target.keyword, 'task.keyword'), paragraph: num(target.paragraph, 'task.paragraph'),
+      ...(target.paragraphs === undefined ? {} : { paragraphs: numList(target.paragraphs, 'task.paragraphs') }),
+    },
     axis: t.axis === undefined ? undefined : oneOf(t.axis, RUBRIC_AXIS_KEYS, 'task.axis'),
     goal: str(t.goal, 'task.goal', 300),
     doneWhen: str(t.doneWhen, 'task.doneWhen', 500),
@@ -58,6 +72,12 @@ function parseTask(x: unknown, i: number): Task {
     turns: num(t.turns, 'task.turns'),
     edits: num(t.edits, 'task.edits'),
     experience: strList(t.experience, 'task.experience', 50),
+    // 2026-11-16에 더한 칸 — 예전 상태에는 없으니 빈 값
+    notes: t.notes === undefined ? [] : strList(t.notes, 'task.notes', 20, 400),
+    lastHint: optStr(t.lastHint, 'task.lastHint'),
+    stuckOn: optStr(t.stuckOn, 'task.stuckOn'),
+    stuckCount: t.stuckCount === undefined ? 0 : count(t.stuckCount, 'task.stuckCount'),
+    check: t.check === undefined ? { asked: 0, claimOk: false } : parseCheck(t.check),
     nudged: bool(t.nudged, 'task.nudged'),
   };
 }
@@ -123,8 +143,12 @@ export class RequestParser {
     const c = obj(x, 'context');
     const paragraphs = strList(c.paragraphs, 'paragraphs', 20);
     if (paragraphs.length === 0) fail('paragraphs: 문단이 하나 이상 있어야 해요.');
-    // 공고는 선택 — 없으면 빈 문자열 (사용자 결정 2026-11-03)
-    return { posting: c.posting === undefined ? '' : str(c.posting, 'posting', 6000).trim(), paragraphs };
+    // 공고·이력서는 선택 — 없으면 빈 문자열 (사용자 결정 2026-11-03 · 이력서는 2026-11-16부터 턴·재평가에도 준다)
+    return {
+      posting: c.posting === undefined ? '' : str(c.posting, 'posting', 6000).trim(),
+      paragraphs,
+      resume: c.resume === undefined ? '' : str(c.resume, 'resume', 6000).trim(),
+    };
   }
 
   static history(x: unknown): Line[] {

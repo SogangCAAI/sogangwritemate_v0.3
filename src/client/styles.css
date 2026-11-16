@@ -162,6 +162,8 @@ textarea:focus-visible, input:not([type='radio']):focus-visible { outline: none;
 .crit-list li.is-met { color: var(--grey); text-decoration: line-through; text-decoration-color: var(--rule); }
 .crit-mark { flex: none; width: 1em; font-weight: 700; color: var(--red); }
 .crit-list li.is-met .crit-mark { color: var(--ink); }
+.para-insert { display: block; font-size: 12px; color: var(--grey); padding: 2px 0 2px 56px; opacity: 0.55; transition: opacity 120ms var(--ease-out); }
+.para-wrap:hover .para-insert, .para-insert:focus-visible { opacity: 1; color: var(--ink); }
 .strip-progress { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--red); white-space: nowrap; }
 .para textarea {
   display: block; resize: none; field-sizing: content; min-height: 104px; overflow: hidden;

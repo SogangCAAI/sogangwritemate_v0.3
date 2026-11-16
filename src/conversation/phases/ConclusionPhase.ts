@@ -17,7 +17,7 @@ export class ConclusionPhase extends Phase {
   override onAccept(j: Judge, now: number): Outcome {
     const s = { ...this.s, repaired: false };
     const t = activeTask(s);
-    const s1 = t ? Tasks.confirmCriteria(s, t.id, s.open?.criteria ?? [], s.open!.firstPair) : s;
+    const s1 = t ? Tasks.note(Tasks.confirmCriteria(s, t.id, s.open?.criteria ?? [], s.open!.firstPair), t.id, `결론 확정: ${s.open!.firstPair}`) : s;
     return Agenda.nudge(Say.model({ ...s1, open: null }, j, false), now);
   }
 }

@@ -198,7 +198,7 @@ test('짧게: 기본 2문장 → 1문장, 뼈대 턴 4 → 3, 재료 불러 주�
 
 test('턴 프롬프트: 막힘 횟수 · 다른 요청 횟수 · 끼어들기 줄', () => {
   const p = new TurnPrompt(new PromptBook());
-  const ctx = { posting: POSTING, paragraphs: ESSAY };
+  const ctx = { posting: POSTING, paragraphs: ESSAY, resume: '' };
   const plain = p.system(inTask1(), ctx);
   assert.ok(!plain.includes('한 문장으로 짧게'));
   assert.ok(plain.includes('이번이 첫 요청이다'));

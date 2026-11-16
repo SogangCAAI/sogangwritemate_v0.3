@@ -21,7 +21,7 @@ export interface SummaryResult {
   finalStrengths: string;
 }
 
-interface Context { posting: string; paragraphs: readonly string[] }
+interface Context { posting: string; paragraphs: readonly string[]; resume?: string }
 
 export class ApiClient {
   diagnose(body: { lang: Lang; posting: string; paragraphs: readonly string[]; resume?: string }): Promise<DiagnoseResult> {
@@ -32,7 +32,7 @@ export class ApiClient {
     return this.post('/api/turn', body);
   }
 
-  evaluate(body: { state: SessionState; paragraph: number; original: string; edited: string; context: Context }): Promise<TurnResult> {
+  evaluate(body: { state: SessionState; paragraph: number; original: string; edited: string; context: Context; originals: readonly string[] }): Promise<TurnResult> {
     return this.post('/api/evaluate', body);
   }
 

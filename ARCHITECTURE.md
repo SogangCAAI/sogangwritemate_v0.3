@@ -38,7 +38,7 @@
 | 시작 | 학생 | 자기소개서(필수) · 지원 공고(선택) · 이력 메모(선택) · 언어 | — |
 | 첫 진단 | `/api/diagnose` | 채점 루브릭(부록 B 5축 × 하/중/상, v2와 같은 판정) + 잘한 점 + 과제 3개(가장 낮은 축부터, 각 완료 기준·첫 질문) + 브리핑 3파트 | Sonnet 1회 |
 | 브리핑 | 코드 | 인사 → 브리핑 파트 1·2·3 (학생의 쉼이나 맞장구로 다음 파트) → 과제 1 시작 제안 | 0 |
-| 과제 진행 | `/api/turn` | 학생 발화 판정 + 튜터의 다음 말 | Haiku 1회/턴 |
+| 과제 진행 | `/api/turn` | 학생 발화 판정 + 튜터의 다음 말 (공고·글·**이력서**·과제·완료 항목 ✓/✗·이미 정해진 것을 함께 받는다) | Haiku 1회/턴 |
 | 과제 수락 | 코드 | 진단이 만든 첫 질문(`opener`)을 바로 말함 | 0 |
 | 문단 수정 | `/api/evaluate` | 완료 항목마다 고친 문단에 보이나 — 코드 항목(상투 표현)은 코드가, 나머지는 Haiku가 | Haiku 1회 (시범 문장 그대로·코드 항목만이면 0) |
 | 마무리 | 코드 | 과제 표에서 만든 요약 파트 → 성공 확인 → 작별 | 0 |
@@ -87,8 +87,12 @@ SessionState
 ├─ unclearStreak  못 알아들은 횟수 (1: 다시 말해 줄래요? · 2: 예시와 함께 · 3: 다른 과제 제안)
 ├─ confusedStreak 학생이 연달아 "모르겠어요"(CONFUSED)라고 한 횟수 (1: 단서 · 2: 뼈대 · 3: 자리 불러 주기 · 4: 과제 미루고 다음) — 다른 수면 0, 수리는 건너뜀
 ├─ offGoalCount   학생이 지금 과제 밖의 것을 하자고 한 횟수 (세션 누적, 0: 겹쳐 받기 · 1+: 학생을 따른다)
-├─ tasks[3]   { kind: content|form, axis, target, goal, doneWhen, criteria[], opener, status, evidence, fromExemplar,
-│               startedAt, endedAt, turns, edits, experience[], nudged }
+├─ tasks[3]   { kind: content|form|structure, axis, target{paragraph, paragraphs?}, goal, doneWhen, criteria[], opener, status, evidence,
+│               startedAt, endedAt, turns, edits, experience[], nudged,
+│               notes[]                 이미 정해진 것 (결론 확정 · 답하지 못한 질문 · 확인 질문에서 짚은 것) — 프롬프트에 "다시 묻지 않는다"로
+│               lastHint, stuckOn, stuckCount  같은 항목이 연달아 안 채워진 횟수 — 재평가가 같은 힌트를 되풀이하지 않게 (2: 뼈대 · 3: 다른 재료)
+│               check{asked, claimOk}   확인 질문(A4)을 몇 번 했나 — 두 번째는 빠진 반쪽만, 세 번째부터는 묻지 않고 완료 }
+│             structure 과제는 target.paragraphs의 문단 어디를 고쳐도 재평가한다 (문장 이동·문단 추가·삭제). 새 내용 항목은 넣지 않는다
 │             criteria = 완료 항목 { id, text, check: llm|noCliche, source: diagnosis|conclusion|code, met, needsNew? }
 │             needsNew = 원래 문단에 없던 정보를 요구하는 항목 — 과제마다 최소 하나 (모델이 안 내면 코드가 n1을 넣는다)
 │             doneWhen은 항목의 한 문장 요약(화면·프롬프트용), 판정은 criteria로
@@ -150,12 +154,18 @@ v2와 다른 점: 중요도를 한 턴 늦게(배경 호출) 받지 않고 같�
                          ▼
           전부 met → 아직 done 아님. "항목은 다 들어갔어요." + 확인 질문 (A4.0, CheckPhase):
                      "지금 N문단이 하고 싶은 말이 뭐고, 어느 문장이 그걸 받쳐 주죠?"
-                     학생이 맞게 짚으면(positive) done · 못 짚으면 힌트 하나(A4.1), 다시 고치기
-          아니면  → active 유지, 항목 ✓/✗ 갱신(Tasks.applyVerdict), reason = 못 채운 항목 하나의 힌트 (A4.1, P1을 연다)
+                     턴 모델은 재평가가 인용한 ✓ 구절을 받아 글을 다시 평가하지 않고 학생이 짚는지만 본다.
+                     둘 다 짚으면(positive) done · 주장만 짚으면(criteria=["claim"]) 기록하고 다음 확인은 받침 문장만 묻는다 ·
+                     확인은 과제당 두 번까지, 세 번째 충족은 바로 done (돌지 않기)
+          아니면  → active 유지, 항목 ✓/✗ 갱신(Tasks.applyVerdict), reason = 못 채운 항목 하나의 힌트 (A4.1, P1을 연다).
+                     같은 항목이 또 안 채워지면 stuckCount↑ — 재평가 프롬프트에 직전 힌트와 횟수를 넘겨 되풀이를 막고(2: 뼈대, 3: 이력서·다른 문단의 재료)
 시범 문장 지름길(그대로 넣으면 done)은 없앴다 — 튜터는 문장을 써 주지 않는다 (교사 원칙, 2026-11-16)
 ```
 
 - 모델이 빠뜨린 항목은 '아직'으로 본다. 코드 항목만 있는 과제는 모델을 부르지 않고 힌트도 코드가 쓴다 (`lines.codeHint`).
+- **재료 바꾸기**: 학생이 "기억이 안 나요"처럼 재료 자체가 없다고 하면(막힘 2회부터) 그 질문을 `notes`에 "답하지 못한 질문"으로 적고, 모델은 이력서·다른 문단에서 대신 쓸 재료 둘을 짚어 고르게 한 뒤 결론을 다시 확인한다(A2.6, `swap`) — 항목이 새 재료로 바뀐다.
+- 형식 과제도 고치기 전에 "무엇을 주장하고 무엇으로 받칠지"를 A2.6으로 합의한다. 결론이 확정되면 종류와 상관없이 다음 칸은 고치기(`edit`)다 — 합의를 되풀이하던 버그를 고쳤다 (2026-11-16 오후).
+- 화면: 글 패널에서 문단을 더하거나(빈 문단, 바로 열림) 비운 문단을 지울 수 있다 (`SessionController.insertParagraph/deleteParagraph`). 과제·화제의 문단 번호를 함께 민다. 처음 글은 `origin`으로 지금 번호에 맞춰 재평가에 보낸다.
 - 예전 상태(항목 없음)는 `doneWhen` 한 문장을 항목 하나로 본다 — 깨지지 않는다.
 - 화면: 글 패널의 "완료 항목 n/m" 체크리스트, 과제 띠의 진행도, 요약 표의 항목 ✓/○.
 - 5축 루브릭은 요약 화면에서만 다시 쓴다: `/api/summary`가 끝 글을 처음과 같은 `rubric.md`로 재진단해 처음/끝 카드를 나란히 보인다 (`Diagnoser.regrade`, `sessions.final_rubric`). 재진단이 실패해도 요약은 돌려준다.

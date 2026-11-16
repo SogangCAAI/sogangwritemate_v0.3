@@ -2,7 +2,7 @@
 import { capSentences, sentences } from '../../checks';
 import { Interruption } from '../../conversation/Interruption';
 import { lines } from '../../lines';
-import { activeTask, type CaCounts, type Judge, type SessionState } from '../../state';
+import { activeTask, inTaskStage, type CaCounts, type Judge, type SessionState } from '../../state';
 import { LlmClient, MODELS } from '../llm/LlmClient';
 import { TurnPrompt } from '../llm/TurnPrompt';
 import { LlmOutputParser, TURN_TOOL } from '../parse/LlmOutputParser';
@@ -39,13 +39,13 @@ export class TurnResponder {
   // 예외 — 학생이 길게 말하는 중의 맞장구(A5.5·CONTINUER), 제안(P1)·뼈대(P1.4)로 끝낸 말, 확인 질문(A4)에 대한 답, 코드가 답하는 되묻기
   static lead(j: Judge, s: SessionState | null, reply = j.reply): string | null {
     const t = s ? activeTask(s) : undefined;
-    if (!s || !t || (s.stage !== 'content' && s.stage !== 'form')) return null;
+    if (!s || !t || !inTaskStage(s.stage)) return null;
     // 모델의 opens 표시가 아니라 실제 문장으로 본다 — 'A5.1'이라 표시하고 물음 없이 끝내는 경우가 있었다 (실측)
     if (QUESTION_END.test(reply.trim()) || j.opens === 'P1' || j.opens === 'P1.4') return null;
     if (j.move === 'CONTINUER' || s.open?.pattern === 'A5.5' || s.open?.pattern === 'A4' || CODE_SERVED.has(j.move)) return null;
     const L = lines(s.lang);
     const p = t.target.paragraph;
-    return t.kind === 'form' ? L.leadForm(p) : t.evidence ? L.leadEdit(p) : L.leadDraft(p);
+    return t.kind !== 'content' ? L.leadForm(p) : t.evidence ? L.leadEdit(p) : L.leadDraft(p);
   }
 
   // 길이를 줄일 때 마지막 질문은 남긴다 — 앞에서부터 자르면 대화를 이끄는 끝 질문이 잘려 나갔다 (실측).
